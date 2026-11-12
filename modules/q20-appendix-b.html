@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>附录 B · 源码坐标总表 · Qwen Code 源码级教程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body class="is-module">
+<div class="progress-rail" id="progress-rail"></div>
+<header class="topbar">
+  <a class="brand" href="../index.html">Qwen <b>Code</b> 源码级教程</a>
+  <span class="spacer"></span>
+  <button id="theme-toggle" type="button">深色</button>
+</header>
+<div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
+                <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
+                <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
+                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
+                <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
+                <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
+                <span class="code">Q07</span><span>工具与 MCP —— 45 个内置工具如何接进同一张表</span></a><a href="q08-permission-hooks.html" class="">
+                <span class="code">Q08</span><span>权限与钩子 —— 两道闸门如何拦住一次工具调用</span></a></div><div class="part"><div class="part-title">Part C · 上下文与资产</div><a href="q09-context-engineering.html" class="">
+                <span class="code">Q09</span><span>上下文工程 —— 三层记忆与并发飞行</span></a><a href="q10-compaction.html" class="">
+                <span class="code">Q10</span><span>记忆压缩 —— 14 种失败原因与一道熔断</span></a><a href="q11-skills-plugins.html" class="">
+                <span class="code">Q11</span><span>技能与插件 —— 能执行 shell 的提示词</span></a><a href="q12-agents-workflow.html" class="">
+                <span class="code">Q12</span><span>Agent 与 Workflow —— 六种终止模式与四个内置代理</span></a></div><div class="part"><div class="part-title">Part D · 使用侧</div><a href="q13-frameworks.html" class="">
+                <span class="code">Q13</span><span>ACP 与 headless —— 内核怎么接进编辑器与脚本</span></a><a href="q14-ink-tui.html" class="">
+                <span class="code">Q14</span><span>TUI 与 ink —— 为什么要把渲染库 fork 进来</span></a></div><div class="part"><div class="part-title">Part E · 实战拓展</div><a href="q15-custom-tool.html" class="">
+                <span class="code">Q15</span><span>实战一：写一个自定义工具</span></a><a href="q16-hooks.html" class="">
+                <span class="code">Q16</span><span>实战二：写一个钩子——三道拦截</span></a><a href="q17-skills.html" class="">
+                <span class="code">Q17</span><span>实战三：写一个技能——发版一条龙</span></a><a href="q18-mcp.html" class="">
+                <span class="code">Q18</span><span>实战四：写一个 MCP 服务器</span></a><a href="q19-headless.html" class="">
+                <span class="code">Q19</span><span>实战五：headless 流水线</span></a></div><div class="part"><div class="part-title">附录</div><a href="q21-appendix-a.html" class="">
+                <span class="code">附录 A</span><span>附录 A · 按问题查</span></a><a href="q20-appendix-b.html" class="active">
+                <span class="code">附录 B</span><span>附录 B · 源码坐标总表</span></a></div></aside>
+<div class="main">
+<main class="prose">
+<header class="module-header">
+      <div class="module-eyebrow">附录 B</div>
+      <h1>附录 B · 源码坐标总表</h1>
+      <div class="module-meta">129 个文件 · 209 条引用 · 约 6 分钟</div>
+    </header>
+    <p>全书 19 章共引用 <strong>129 个源文件、209 处坐标</strong>。
+本表按引用次数排序，方便你想「改这个行为会影响哪几章」时反查。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>引用次数</th>
+<th>文件</th>
+<th>出现在</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>6</td>
+<td><code>packages/core/src/event-bus/bus.ts</code></td>
+<td>Q01 Q03</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>packages/core/src/tools/tool-registry.ts</code></td>
+<td>Q07 Q15</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>packages/core/src/mcp/tools/mcp-tool.ts</code></td>
+<td>Q07 Q18</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>packages/core/src/core/agent-loop.ts</code></td>
+<td>Q03</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>packages/core/src/event-bus/llm-handler.ts</code></td>
+<td>Q05</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>packages/core/src/tools/tools.ts</code></td>
+<td>Q07 Q15</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>packages/core/src/skills/inlineSkillActivation.ts</code></td>
+<td>Q11 Q17</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/cli/src/framework/appFramework.ts</code></td>
+<td>Q02 Q13</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/event-bus/query-stream.ts</code></td>
+<td>Q03</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/event-bus/llm/request-preparation.ts</code></td>
+<td>Q05</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/protocol/transcript/message.ts</code></td>
+<td>Q06</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/tools/tool-names.ts</code></td>
+<td>Q07 Q15</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/mcp/mcp-schema-sanitizer.ts</code></td>
+<td>Q07 Q15 Q18</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/hooks/types.ts</code></td>
+<td>Q08 Q16</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/permissions/manager/tool-check.ts</code></td>
+<td>Q08 Q16</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/hooks/hookPlanner.ts</code></td>
+<td>Q08 Q16</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/hooks/hookAggregator.ts</code></td>
+<td>Q08 Q16</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/context/memoryContextManager.ts</code></td>
+<td>Q09</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/cli/src/headless/headlessSession.ts</code></td>
+<td>Q13 Q19</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/cli/src/ink/renderer.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>packages/core/src/hooks/hookOutputSchema.ts</code></td>
+<td>Q16</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/event-bus/state.ts</code></td>
+<td>Q04</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/event-bus/conversation-handler.ts</code></td>
+<td>Q04</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/core/query-event.ts</code></td>
+<td>Q04</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/core/query-turn.ts</code></td>
+<td>Q04</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/event-bus/conversation/tools-settled.ts</code></td>
+<td>Q04 Q07</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/event-bus/llm/request-preparation-helpers.ts</code></td>
+<td>Q05</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/event-bus/llm/inference-round.ts</code></td>
+<td>Q05</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/event-bus/llm/result-assembly.ts</code></td>
+<td>Q05</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/protocol/provider/request-converter.ts</code></td>
+<td>Q06</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/mcp/client/mcpClient.ts</code></td>
+<td>Q07 Q18</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/permissions/manager/permission-manager.ts</code></td>
+<td>Q08</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/hooks/hookRunner.ts</code></td>
+<td>Q08 Q16</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/context/system-context.ts</code></td>
+<td>Q09</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/compression-v2/types.ts</code></td>
+<td>Q10</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/compression-v2/pipeline.ts</code></td>
+<td>Q10</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/skills/skillManager.ts</code></td>
+<td>Q11</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/agents/types.ts</code></td>
+<td>Q12</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/agents/subagent-tool.ts</code></td>
+<td>Q12</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/resource/src/resource/kinds/skills/types.ts</code></td>
+<td>Q17</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/utils/argumentSubstitution.ts</code></td>
+<td>Q17</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/cli/src/services/SkillCommandLoader.ts</code></td>
+<td>Q17</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/tools/activate-skill.ts</code></td>
+<td>Q17</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/mcp/mcpServerConfig.ts</code></td>
+<td>Q18</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/test-utils/test-mcp-server.ts</code></td>
+<td>Q18</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/core/src/utils/headless.ts</code></td>
+<td>Q19</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/cli/src/startup/options/headless.ts</code></td>
+<td>Q19</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>packages/cli/src/utils/headlessPermissionPrompt.ts</code></td>
+<td>Q19</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/event-bus/events.ts</code></td>
+<td>Q03</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/event-bus/runtime.ts</code></td>
+<td>Q03</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/event-bus/conversation/model-settled.ts</code></td>
+<td>Q04</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/event-bus/conversation/submit.ts</code></td>
+<td>Q04</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/event-bus/conversation/context.ts</code></td>
+<td>Q04</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/core/query-terminal.ts</code></td>
+<td>Q04</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/core/turn-budget.ts</code></td>
+<td>Q04</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/core/turn-hooks.ts</code></td>
+<td>Q04</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/event-bus/llm/inference.ts</code></td>
+<td>Q05</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/protocol/transcript/conversions.ts</code></td>
+<td>Q06</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/protocol/transcript/message-utils.ts</code></td>
+<td>Q06</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/protocol/provider/sse-client.ts</code></td>
+<td>Q06</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/protocol/schemas/sdk-message.ts</code></td>
+<td>Q06</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/protocol/wire/control.ts</code></td>
+<td>Q06</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/tools/streaming-tool-executor.ts</code></td>
+<td>Q07</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/tool-executor/state-manager.ts</code></td>
+<td>Q07</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/tool-executor/types.ts</code></td>
+<td>Q07</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/mcp/sessionMcpManager/sessionMcpManager.ts</code></td>
+<td>Q07</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/mcp/connector/connectMcpServer.ts</code></td>
+<td>Q07</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/hooks/hookEventHandler.ts</code></td>
+<td>Q08</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/hooks/hookSystem.ts</code></td>
+<td>Q08</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/hooks/hookRegistry.ts</code></td>
+<td>Q08</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/permissions/manager/session-permission-manager.ts</code></td>
+<td>Q08</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/permissions/permission-modes/auto/classifier.ts</code></td>
+<td>Q08</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/permissions/permission-modes/auto/dangerous-rules.ts</code></td>
+<td>Q08</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/permissions/settings/permissionsLoader.ts</code></td>
+<td>Q08</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/attachments/generators/mcp-generators.ts</code></td>
+<td>Q09</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/attachments/get-attachments.ts</code></td>
+<td>Q09</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/attachments/types.ts</code></td>
+<td>Q09</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/attachments/transcript-state.ts</code></td>
+<td>Q09</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/attachments/generators/file-generators.ts</code></td>
+<td>Q09</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/compression-v2/auto-compact.ts</code></td>
+<td>Q10</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/compression-v2/fork-compact.ts</code></td>
+<td>Q10</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/compression-v2/post-compact-finalize.ts</code></td>
+<td>Q10</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/compression-v2/apply-post-compact.ts</code></td>
+<td>Q10</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/compression-v2/ptl-retry.ts</code></td>
+<td>Q10</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/compression-v2/tool-result-budget.ts</code></td>
+<td>Q10</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/compression-v2/compact-utils.ts</code></td>
+<td>Q10</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/skills/bundled/loop.ts</code></td>
+<td>Q11</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/skills/bundled/run-skill-generator.ts</code></td>
+<td>Q11</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/plugins/management/pluginManager.ts</code></td>
+<td>Q11</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/plugins/pluginLoader.ts</code></td>
+<td>Q11</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/plugins/validation/validatePlugin.ts</code></td>
+<td>Q11</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/plugins/schemas.ts</code></td>
+<td>Q11</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/plugins/loadPluginCommands.ts</code></td>
+<td>Q11</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/agents/run-agent.ts</code></td>
+<td>Q12</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/agents/run-subagent.ts</code></td>
+<td>Q12</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/agents/fork-subagent.ts</code></td>
+<td>Q12</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/agents/registry/agentRegistry.ts</code></td>
+<td>Q12</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/agents/registry/agentLoader.ts</code></td>
+<td>Q12</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/agents/builtin/explore-agent.ts</code></td>
+<td>Q12</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/agents/subagent-sdk-events.ts</code></td>
+<td>Q12</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/agents/teams/agent-team-runtime.ts</code></td>
+<td>Q12</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/framework/headlessAppFramework.ts</code></td>
+<td>Q13</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/framework/acpAppFramework.ts</code></td>
+<td>Q13</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/framework/tuiAppFramework.ts</code></td>
+<td>Q13</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/headless/permission.ts</code></td>
+<td>Q13</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/headless/controlStream.ts</code></td>
+<td>Q13</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/headless/streamJsonOutput.ts</code></td>
+<td>Q13</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/acp/acpSessionHost.ts</code></td>
+<td>Q13</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/acp/acpServer.ts</code></td>
+<td>Q13</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/acp/toolProjection.ts</code></td>
+<td>Q13</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ink/render-node-to-output.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ink/screen.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ink/log-update.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ink/output.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ink/parse-keypress.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ink/styles.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ink/reconciler.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ink/dom.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ink/stringWidth.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ink/optimizer.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/ui/utils/toolDisplayProjection.ts</code></td>
+<td>Q14</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/tools/tool-execution-lifecycle.ts</code></td>
+<td>Q15</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/resource/src/resource/kinds/skills/skillLoader.ts</code></td>
+<td>Q17</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/resource/src/resource/kinds/skills/frontmatterParsers.ts</code></td>
+<td>Q17</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/mcp/tools/mcp-names.ts</code></td>
+<td>Q18</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/mcp/tools/mcp-timeouts.ts</code></td>
+<td>Q18</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/utils/nonInteractiveOutput.ts</code></td>
+<td>Q19</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/cli/src/nonInteractiveCliCommands.ts</code></td>
+<td>Q19</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>packages/core/src/engine/headless-projection.ts</code></td>
+<td>Q19</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="sec-1-怎么用这张表">怎么用这张表</h2>
+<p><strong>想读懂某个行为</strong>：找引用次数最多的文件，那通常是核心。
+<code>event-bus/bus.ts</code> 被引用 6 次，是全书最热的文件，Q03 的事。</p>
+<p><strong>想改动某处</strong>：在表里找到它，看「出现在」列里的章节号。
+一个文件被 4 章引用，说明改它有 4 个地方需要同步复查。</p>
+<p><strong>想验证坐标</strong>：所有坐标都可用 <code>scripts/fact-check.mjs</code> 一次校验，
+它会检查文件是否存在、行号是否越界。</p>
+<h2 id="sec-2-关于行号的一个提醒">关于行号的一个提醒</h2>
+<p>这些行号对应 <code>1.0.0-preview @ 2026-11-12</code> 这一份快照。
+源码会变，行号会漂。所以本书所有论断都尽量给到<strong>函数名 + 行号</strong>两重坐标——
+行号对不上时，按函数名搜。</p>
+
+<div class="pager">
+      <a class="prev" href="q21-appendix-a.html"><span class="lbl">上一篇</span>附录 A · 按问题查</a>
+      <span></span>
+    </div>
+</main>
+<nav class="toc"><div class="toc-title">本章目录</div><a href="#sec-1-怎么用这张表" class="">怎么用这张表</a><a href="#sec-2-关于行号的一个提醒" class="">关于行号的一个提醒</a></nav>
+</div>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var key = "qw-book-theme";
+  var saved = localStorage.getItem(key);
+  if (saved) root.setAttribute("data-theme", saved);
+  var btn = document.getElementById("theme-toggle");
+  function label() {
+    btn.textContent = root.getAttribute("data-theme") === "dark" ? "浅色" : "深色";
+  }
+  label();
+  btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem(key, next);
+    label();
+  });
+
+  var rail = document.getElementById("progress-rail");
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    rail.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+  if (links.length) {
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+    function mark() {
+      var best = -1;
+      targets.forEach(function (t, i) {
+        if (t && t.getBoundingClientRect().top <= 120) best = i;
+      });
+      links.forEach(function (a, i) { a.classList.toggle("active", i === best); });
+    }
+    document.addEventListener("scroll", mark, { passive: true });
+    mark();
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(
+        function () { return true; },
+        function () { return legacyCopy(text); }
+      );
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function legacyCopy(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  // 代码块复制：双击 HTML 打开时没有 secure context，所以留了 execCommand 退路
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest(".copy");
+    if (!button) return;
+    var lines = button.closest(".code-block").querySelectorAll(".ln");
+    var text = Array.prototype.map.call(lines, function (line) {
+      return line.textContent;
+    }).join("\n"); // 在模板字符串里必须写成 \n，否则产物中字符串字面量跨行、整块脚本语法错误
+    copyText(text).then(function (ok) {
+      button.textContent = ok ? "已复制" : "复制失败";
+      button.classList.toggle("is-done", ok);
+      setTimeout(function () {
+        button.textContent = "复制";
+        button.classList.remove("is-done");
+      }, 1200);
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>实战五：headless 流水线 · Qwen Code 源码级教程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body class="is-module">
+<div class="progress-rail" id="progress-rail"></div>
+<header class="topbar">
+  <a class="brand" href="../index.html">Qwen <b>Code</b> 源码级教程</a>
+  <span class="spacer"></span>
+  <button id="theme-toggle" type="button">深色</button>
+</header>
+<div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
+                <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
+                <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
+                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
+                <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
+                <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
+                <span class="code">Q07</span><span>工具与 MCP —— 45 个内置工具如何接进同一张表</span></a><a href="q08-permission-hooks.html" class="">
+                <span class="code">Q08</span><span>权限与钩子 —— 两道闸门如何拦住一次工具调用</span></a></div><div class="part"><div class="part-title">Part C · 上下文与资产</div><a href="q09-context-engineering.html" class="">
+                <span class="code">Q09</span><span>上下文工程 —— 三层记忆与并发飞行</span></a><a href="q10-compaction.html" class="">
+                <span class="code">Q10</span><span>记忆压缩 —— 14 种失败原因与一道熔断</span></a><a href="q11-skills-plugins.html" class="">
+                <span class="code">Q11</span><span>技能与插件 —— 能执行 shell 的提示词</span></a><a href="q12-agents-workflow.html" class="">
+                <span class="code">Q12</span><span>Agent 与 Workflow —— 六种终止模式与四个内置代理</span></a></div><div class="part"><div class="part-title">Part D · 使用侧</div><a href="q13-frameworks.html" class="">
+                <span class="code">Q13</span><span>ACP 与 headless —— 内核怎么接进编辑器与脚本</span></a><a href="q14-ink-tui.html" class="">
+                <span class="code">Q14</span><span>TUI 与 ink —— 为什么要把渲染库 fork 进来</span></a></div><div class="part"><div class="part-title">Part E · 实战拓展</div><a href="q15-custom-tool.html" class="">
+                <span class="code">Q15</span><span>实战一：写一个自定义工具</span></a><a href="q16-hooks.html" class="">
+                <span class="code">Q16</span><span>实战二：写一个钩子——三道拦截</span></a><a href="q17-skills.html" class="">
+                <span class="code">Q17</span><span>实战三：写一个技能——发版一条龙</span></a><a href="q18-mcp.html" class="">
+                <span class="code">Q18</span><span>实战四：写一个 MCP 服务器</span></a><a href="q19-headless.html" class="active">
+                <span class="code">Q19</span><span>实战五：headless 流水线</span></a></div><div class="part"><div class="part-title">附录</div><a href="q21-appendix-a.html" class="">
+                <span class="code">附录 A</span><span>附录 A · 按问题查</span></a><a href="q20-appendix-b.html" class="">
+                <span class="code">附录 B</span><span>附录 B · 源码坐标总表</span></a></div></aside>
+<div class="main">
+<main class="prose">
+<header class="module-header">
+      <div class="module-eyebrow">Q19</div>
+      <h1>实战五：headless 流水线</h1>
+      <div class="module-meta">2,139 字 · 93 行代码 · 12 块 · 约 16 分钟</div>
+    </header>
+    <p>Q13 讲过 7 个 FrameworkMode，headless 与 ACP、TUI 并列。
+本章不再是「读代码」，而是<strong>把它接进 CI</strong>：
+让工具、钩子、技能、MCP 服务器在无人值守时也能跑。</p>
+<h2 id="sec-1-一-headless-是自动判定的-不是配出来的">一、headless 是自动判定的，不是配出来的</h2>
+<p>很多人以为要加 <code>--headless</code>。没有这个标志。
+判定在 <code>isHeadlessMode</code>（<code>packages/core/src/utils/headless.ts:45-77</code>），四条触发条件：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>条件</th>
+<th>判据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CI 环境</td>
+<td><code>process.env.CI === 'true'</code> 或 <code>GITHUB_ACTIONS === 'true'</code></td>
+</tr>
+<tr>
+<td>非 TTY</td>
+<td>stdin 或 stdout 任一不是 TTY</td>
+</tr>
+<tr>
+<td>显式 prompt</td>
+<td><code>--prompt</code> / <code>-p</code> 存在</td>
+</tr>
+<tr>
+<td>SDK 模式</td>
+<td><code>--input-format stream-json</code> 或 <code>--print</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>「非 TTY」是其中最容易被忽略的一条</strong>。在 CI 里管道重定向了 stdout，
+<code>process.stdout.isTTY</code> 就是 <code>undefined</code>，于是自动进 headless——
+你甚至不用传任何标志。</p>
+<p>这也解释了一个常见困惑：「本地能交互，进 CI 变成一次性执行」。
+不是你配错了，是 TTY 没了。</p>
+<p><code>:46-52</code> 还有个反例开关：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">if</span> (<span class="tok-fn">readBrandEnv</span>(ENV_INTEGRATION_TEST) !== <span class="tok-str">'true'</span>) {</span><span class="ln">  <span class="tok-kw">const</span> isCI =</span><span class="ln">    process.env[<span class="tok-str">'CI'</span>] === <span class="tok-str">'true'</span> || process.env[<span class="tok-str">'GITHUB_ACTIONS'</span>] === <span class="tok-str">'true'</span>;</span><span class="ln">  <span class="tok-kw">if</span> (isCI) {</span><span class="ln">    <span class="tok-kw">return</span> <span class="tok-kw">true</span>;</span><span class="ln">  }</span><span class="ln">}</span></code></pre></div>
+<p>集成测试可以设一个环境变量，<strong>让 CI 检测失效</strong>。
+否则测试在流水线里跑，永远拿不到交互模式，一半用例写不出来。</p>
+<h2 id="sec-2-二-两条输入路径">二、两条输入路径</h2>
+<p>进去之后分两条路（<code>packages/cli/src/headless/headlessSession.ts:199-203</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">if</span> (<span class="tok-kw">this</span>.streamJsonInput) {</span><span class="ln">  <span class="tok-kw">await</span> <span class="tok-kw">this</span>.<span class="tok-fn">runStreamJsonInput</span>();</span><span class="ln">} <span class="tok-kw">else</span> {</span><span class="ln">  <span class="tok-kw">await</span> <span class="tok-kw">this</span>.<span class="tok-fn">runTextTurn</span>();</span><span class="ln">}</span></code></pre></div>
+<p><strong>text 路径</strong>：读一次性 prompt，跑一轮，把最终结果打到 stdout。
+适合「跑完就走」的 CI 任务。</p>
+<p><strong>stream-json 路径</strong>：从 stdin 流式读多条用户消息，每条都跑，
+结果按帧（frame）逐条写到 stdout。适合<strong>长会话</strong>：
+你可以在一个进程里连续问十个问题，不用每次重启（省掉冷启动和上下文重建）。</p>
+<p><strong>输入</strong>两条路，<strong>输出</strong>三条（<code>--output-format</code>，见 <code>commands/index.ts:419</code>）：
+<code>text</code>（纯文本）、<code>json</code>（单个 JSON 对象）、<code>stream-json</code>（逐帧流）。
+输入 <code>stream-json</code> 必须配输出 <code>stream-json</code>，否则启动就报参数错误——
+因为流式输入需要帧级回执，纯文本无法承载。</p>
+<p>路由标签也据此区分（<code>packages/cli/src/startup/options/headless.ts:28-33</code>）：
+<code>headlessStreamJson</code> 与 <code>headlessText</code>。两个标签在监控里是分开统计的。</p>
+<h2 id="sec-3-三-退出码-ci-唯一能听懂的语言">三、退出码：CI 唯一能听懂的语言</h2>
+<p>CI 不读你的漂亮输出，它只看退出码。
+headless 的退出码规则写在 <code>nonInteractiveOutput.ts:63-106</code>：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">function</span> <span class="tok-fn">getHeadlessResultExitCode</span>(msg: SDKMessage): <span class="tok-kw">number</span> | <span class="tok-kw">undefined</span> {</span><span class="ln">  <span class="tok-kw">if</span> (msg.<span class="tok-kw">type</span> !== <span class="tok-str">'result'</span>) {</span><span class="ln">    <span class="tok-kw">return</span> <span class="tok-kw">undefined</span>;</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">return</span> msg.is_error ? <span class="tok-num">1</span> : <span class="tok-num">0</span>;</span><span class="ln">}</span></code></pre></div>
+<p>再看中断的处理（<code>:78-81</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">} <span class="tok-kw">else</span> <span class="tok-kw">if</span> (msg.<span class="tok-kw">type</span> === <span class="tok-str">'result'</span> &amp;&amp; msg.subtype !== <span class="tok-str">'success'</span>) {</span><span class="ln">  <span class="tok-kw">const</span> errorMsg = <span class="tok-fn">extractResultErrors</span>(msg);</span><span class="ln">  process.exitCode = errorMsg.<span class="tok-fn">includes</span>(<span class="tok-str">'Operation aborted'</span>) ? <span class="tok-num">130</span> : <span class="tok-num">1</span>;</span><span class="ln">}</span></code></pre></div>
+<p>三条规则：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>情形</th>
+<th>退出码</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>result.is_error === true</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>被中断（<code>Operation aborted</code>）</td>
+<td>130</td>
+</tr>
+<tr>
+<td>其它非 success 子类型</td>
+<td>1</td>
+</tr>
+<tr>
+<td>正常</td>
+<td>0</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>130 是 shell 的惯例值</strong>（128 + SIGINT=2）。流水线看到 130 就知道
+「有人按了取消」，不是代码有问题；看到 1 才是真失败。
+把两者混成一个 1，会让「取消」在报表里显示成「失败」，
+排查时白找半天。</p>
+<p>text 路径还有三种子类型的分支（<code>:88-105</code>）：
+<code>success</code>、<code>error_during_execution</code>、<code>error_max_turns</code>。
+最后一条尤其重要——<strong>回合数用尽也算失败</strong>。
+Q12 讲过子代理有回合上限；主会话在 headless 下同理，
+跑到上限就 <code>exit 1</code>，不会假装成功。</p>
+<h2 id="sec-4-四-没人能点-允许-时-权限怎么办">四、没人能点「允许」时，权限怎么办</h2>
+<p>这是 headless 最实际的问题。TUI 里弹个窗，你点一下就行；
+CI 里没人。源码给了四种模式（<code>packages/cli/src/utils/headlessPermissionPrompt.ts</code>）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>模式</th>
+<th>触发条件</th>
+<th>谁来回答</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>stdio 提示</td>
+<td><code>--permission-prompt-tool stdio</code></td>
+<td>通过 stdio 问宿主进程</td>
+</tr>
+<tr>
+<td>具名工具</td>
+<td>传了其它工具名</td>
+<td>用那个 MCP 工具去问</td>
+</tr>
+<tr>
+<td>默认</td>
+<td><code>--input-format stream-json</code> 且未指定</td>
+<td>走 stdio</td>
+</tr>
+<tr>
+<td>远程 worker</td>
+<td>远程 worker 模式</td>
+<td>交给远端控制器</td>
+</tr>
+</tbody>
+</table></div>
+<p>优先次序在 <code>:32-40</code>：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">const</span> isStdio = <span class="tok-fn">isStdioPermissionPromptTool</span>(permissionPromptTool);</span><span class="ln"><span class="tok-kw">const</span> isNamedPermissionPromptTool =</span><span class="ln">  <span class="tok-fn">Boolean</span>(permissionPromptTool) &amp;&amp; !isStdio;</span><span class="ln"><span class="tok-kw">const</span> namedPermissionPromptTool = isNamedPermissionPromptTool</span><span class="ln">  ? permissionPromptTool</span><span class="ln">  : <span class="tok-kw">undefined</span>;</span><span class="ln"><span class="tok-kw">const</span> useStdioPermissionPrompt =</span><span class="ln">  isStdio ||</span><span class="ln">  (!isNamedPermissionPromptTool &amp;&amp; inputFormat === <span class="tok-str">'stream-json'</span>);</span></code></pre></div>
+<p>注意 <code>stdio</code> 这个值是<strong>特例</strong>：它是唯一被硬编码的名字，
+其余任何字符串都当「工具名」。所以别给工具起名叫 <code>stdio</code>。</p>
+<p><code>:47-48</code> 那句注释解释了一个容易踩的坑：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">// SDK 仅在配置 canUseTool 时显式传入 stdio；未配置时由权限 Hook 决策。</span></span><span class="ln">installStdioPermissionHandler:</span><span class="ln">  useStdioPermissionPrompt &amp;&amp; (!<span class="tok-fn">isSDKMode</span>() || isStdio),</span></code></pre></div>
+<p>SDK 模式下，如果宿主没配 <code>canUseTool</code> 回调，<strong>不安装</strong> stdio 处理器。
+否则一个没人接的权限请求会挂在那儿，等到超时才结束。
+让权限 Hook 去决策（Q16 写的那种），至少能立刻给出 <code>deny</code>。</p>
+<p><strong>实践建议</strong>：CI 里最省事的做法不是去实现权限协议，
+而是<strong>在配置里把「允许什么」写清楚</strong>：</p>
+<ul>
+<li>用 <code>--permission-mode</code> 选一个预置模式</li>
+<li>或用 Q08 的规则文件，白名单精确到命令</li>
+<li>或给 MCP 服务器加 <code>trust: true</code>（Q18 讲过）</li>
+</ul>
+<h2 id="sec-5-五-异常收敛-一条流不能断在半截">五、异常收敛：一条流不能断在半截</h2>
+<p>stream-json 的消费者（你的脚本）在逐行解析 stdout。
+如果进程中途抛出未捕获异常，输出就断在半个 JSON 上——
+解析器直接崩，你连错误信息都拿不到。</p>
+<p>所以 <code>run()</code> 有一段专门处理这件事（<code>headlessSession.ts:204-217</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">} <span class="tok-kw">catch</span> (error) {</span><span class="ln">  <span class="tok-kw">if</span> (error <span class="tok-kw">instanceof</span> HeadlessStartupAbort) {</span><span class="ln">    <span class="tok-kw">this</span>.<span class="tok-fn">renderStartupFailure</span>(error.failure);</span><span class="ln">  } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (</span><span class="ln">    <span class="tok-kw">this</span>.streamJsonOutput &amp;&amp;</span><span class="ln">    <span class="tok-kw">this</span>.openedSessionId &amp;&amp;</span><span class="ln">    !(error <span class="tok-kw">instanceof</span> FatalError)</span><span class="ln">  ) {</span><span class="ln">    <span class="tok-com">// stream-json 的会话级意外失败以单帧 result 收尾；text 与 FatalError</span></span><span class="ln">    <span class="tok-com">// 仍走入口的错误出口（stderr + 对应退出码）。</span></span><span class="ln">    <span class="tok-kw">this</span>.<span class="tok-fn">renderSessionFailure</span>(error);</span><span class="ln">  } <span class="tok-kw">else</span> {</span><span class="ln">    <span class="tok-kw">throw</span> error;</span><span class="ln">  }</span><span class="ln">} <span class="tok-kw">finally</span> {</span><span class="ln">  <span class="tok-kw">this</span>.permissionChannel?.<span class="tok-fn">close</span>();</span></code></pre></div>
+<p>四个条件同时成立才「收敛成 result 帧」：
+用了 stream-json 输出、会话已打开、且不是致命错误。
+<strong>会话没打开</strong>就不收敛——因为这时还没有流可断，直接抛出去更清楚。</p>
+<p><code>finally</code> 里三件事也值得看：关权限通道、移除 stdout 错误处理、
+<code>finish()</code> 里清工具失败日志。清日志是为了<strong>不跨会话泄漏</strong>——
+长驻进程跑十条消息，第九条的失败不该出现在第十条的报告里。</p>
+<h2 id="sec-6-六-把前面四章接起来-一条真实的-ci-流水线">六、把前面四章接起来：一条真实的 CI 流水线</h2>
+<p>到这一步，我们手上的东西可以拼成一条完整的审查流水线了。</p>
+<p><strong><code>.qwen/settings.json</code></strong>（权限白名单）：</p>
+<div class="code-block" data-lang="json">
+<div class="code-head"><span class="lang">json</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">{</span><span class="ln">  <span class="tok-str">"permissions"</span>: {</span><span class="ln">    <span class="tok-str">"allow"</span>: [</span><span class="ln">      <span class="tok-str">"Read"</span>,</span><span class="ln">      <span class="tok-str">"Bash(npm test:*)"</span>,</span><span class="ln">      <span class="tok-str">"Bash(git diff:*)"</span></span><span class="ln">    ],</span><span class="ln">    <span class="tok-str">"deny"</span>: [<span class="tok-str">"Bash(git push:*)"</span>, <span class="tok-str">"Bash(rm:*)"</span>]</span><span class="ln">  }</span><span class="ln">}</span></code></pre></div>
+<p><strong><code>.qwen/skills/review/SKILL.md</code></strong>（Q17 写的技能，改一版做审查）：</p>
+<div class="code-block" data-lang="markdown">
+<div class="code-head"><span class="lang">markdown</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">---</span><span class="ln">name: review</span><span class="ln">description: Review staged changes for bugs and style issues.</span><span class="ln">allowed-tools: Read, Bash</span><span class="ln">---</span><span class="ln"></span><span class="ln">审查 `git diff --staged` 的内容。</span><span class="ln"></span><span class="ln">1. 读 diff，逐文件列出改动意图</span><span class="ln">2. 找逻辑错误、边界条件、未处理的错误路径</span><span class="ln">3. 输出 Markdown 表格：文件 | 问题 | 严重度</span><span class="ln"></span><span class="ln">只报告真实问题，不要凑数。</span></code></pre></div>
+<p><strong>CI 脚本</strong>：</p>
+<div class="code-block" data-lang="bash">
+<div class="code-head"><span class="lang">bash</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">#!/usr/bin/env bash</span><span class="ln">set -uo pipefail</span><span class="ln"></span><span class="ln">qwen --prompt "/review" --output-format text &gt; review.md</span><span class="ln">code=$?</span><span class="ln"></span><span class="ln">case $code in</span><span class="ln">  0)   echo "review ok" ;;</span><span class="ln">  130) echo "cancelled"; exit 0 ;;</span><span class="ln">  *)   echo "review failed (exit $code)"; exit $code ;;</span><span class="ln">esac</span></code></pre></div>
+<p>三个细节：</p>
+<ol>
+<li><strong><code>set -e</code> 换成 <code>set -uo pipefail</code></strong>。要自己读 <code>$?</code>，就不能让 <code>set -e</code>
+在赋值前把脚本干掉。</li>
+<li><strong>130 当作成功</strong>。取消不是失败，别让报表变红。</li>
+<li><strong><code>--output-format text</code></strong> 拿到的是纯文本结果，写 <code>&gt; review.md</code> 直接成文件；
+要结构化就换 <code>json</code>（单次结果）或 <code>stream-json</code>（逐帧）。</li>
+</ol>
+<h2 id="sec-7-七-工程暗坑">七、工程暗坑</h2>
+<p><strong>1. 没有权限通道时会降级成 <code>isPlainHeadless</code></strong>
+源码在 <code>config.ts:1343-1347</code> 判定：非交互且无外部权限处理器时，
+隐藏交互类工具、关掉 Plan 模式（<code>isPlanModeRequest(...) &amp;&amp; !isPlainHeadless</code>，<code>:1355</code>）。
+所以在 CI 里<strong>配置不全等于一批能力直接消失</strong>，而不是「等着人点」。</p>
+<p><strong>2. stdout 只能有协议数据</strong>
+<code>installStdoutErrorHandler</code> 在 <code>run()</code> 里很早就装上了（<code>:190</code>）。
+任何 <code>console.log</code> 都会污染流——包括你加的调试输出。
+调试信息一律走 stderr。</p>
+<p><strong>3. 回合上限会静默截断长任务</strong>
+<code>error_max_turns</code> 是真实存在的失败子类型。
+一个大重构如果预计要 40 轮，就得把上限调上去，
+否则跑一半退出、退出码 1，看起来像「代码有问题」。</p>
+<p><strong>4. 超时是外部的责任</strong>
+headless 自己不设总时长上限。CI 平台通常有 job timeout，
+但那会杀掉进程、拿不到 result 帧。
+更稳的做法是在脚本里用 <code>timeout 600 qwen ...</code>，
+让它先收到中断、走 130 那条路。</p>
+<p><strong>5. 非 TTY 下颜色码可能混进输出</strong>
+即使不用 <code>--output-format</code>，某些库会检测到「不是 TTY」而跳过颜色。
+但如果检测写错，ANSI 码就混进 <code>review.md</code>。
+看到文件里有一堆 <code>[32m</code>，就是这个问题。</p>
+<h2 id="sec-8-八-本章源码索引">八、本章源码索引</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>行数</th>
+<th>本章用到的位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packages/core/src/utils/headless.ts</code></td>
+<td>100</td>
+<td><code>:45-77</code> 四条触发条件</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:46-52</code> 集成测试豁免</td>
+</tr>
+<tr>
+<td><code>packages/cli/src/startup/options/headless.ts</code></td>
+<td>42</td>
+<td><code>:28-33</code> 两条路由标签</td>
+</tr>
+<tr>
+<td><code>packages/cli/src/headless/headlessSession.ts</code></td>
+<td>954</td>
+<td><code>:183-229</code> <code>run()</code> 主流程</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:199-203</code> 两条输入路径</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:204-227</code> 异常收敛与清理</td>
+</tr>
+<tr>
+<td><code>packages/cli/src/utils/nonInteractiveOutput.ts</code></td>
+<td>273</td>
+<td><code>:63-68</code> 退出码</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:74-82</code> 中断 130</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:84-106</code> 三种子类型</td>
+</tr>
+<tr>
+<td><code>packages/cli/src/utils/headlessPermissionPrompt.ts</code></td>
+<td>54</td>
+<td><code>:28-53</code> 四种权限模式</td>
+</tr>
+<tr>
+<td><code>packages/cli/src/nonInteractiveCliCommands.ts</code></td>
+<td>351</td>
+<td>斜杠命令在 headless 下的服务化</td>
+</tr>
+<tr>
+<td><code>packages/core/src/engine/headless-projection.ts</code></td>
+<td>923</td>
+<td>会话事件投影成 SDK 消息</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="sec-9-九-自己动手验证">九、自己动手验证</h2>
+<div class="code-block" data-lang="bash">
+<div class="code-head"><span class="lang">bash</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">node qw-examples/check/19-headless.mjs</span></code></pre></div>
+<p>预期输出：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">headless triggers: 4 -&gt; CI env | not TTY | prompt flag | stream-json</span><span class="ln">also accepts -p: true</span><span class="ln">GITHUB_ACTIONS env: true</span><span class="ln">headless routes: 2 -&gt; headlessStreamJson / headlessText</span><span class="ln">exit code: is_error -&gt; 1: true</span><span class="ln">exit code: aborted -&gt; 130: true</span><span class="ln">text result subtypes handled: success, error_during_execution, error_max_turns</span><span class="ln">permission prompt modes: 4 -&gt; stdio | named tool | stream-json→stdio |</span><span class="ln">  remote worker</span></code></pre></div>
+<p>改一处试试：注释掉 <code>headless.ts:58</code> 里的 <code>!!options?.prompt</code>，
+然后用 <code>qwen -p &quot;hi&quot;</code> 在一个真终端里跑。</p>
+<p>你会看到它<strong>没有</strong>进 headless——因为 TTY 还在，
+而唯一的触发条件被你关了。光标悬在那里等交互输入。
+这个实验直接证明：headless 是「环境推断」出来的，不是一个开关。</p>
+<h2 id="sec-10-十-全书收尾">十、全书收尾</h2>
+<p>到这里，19 章全部走完。回头看这条路线：</p>
+<ul>
+<li><strong>Part A</strong> 给了你一张地图（Q01–Q02）</li>
+<li><strong>Part B</strong> 拆开了内核：事件总线、对话回合、请求装配、消息协议、工具、权限</li>
+<li><strong>Part C</strong> 讲了上下文怎么攒起来又怎么压下去，技能与子代理怎么复用</li>
+<li><strong>Part D</strong> 说清楚了三种前端（ACP、headless、TUI）如何共用一套内核</li>
+<li><strong>Part E</strong> 是你亲手写的五个东西：工具、钩子、技能、MCP 服务器、CI 流水线</li>
+</ul>
+<p>如果只记三句话：</p>
+<ol>
+<li><strong>一切皆事件</strong>。<code>query()</code> 只有一个输入口，其余全是事件进出。</li>
+<li><strong>确定性换可靠性</strong>。参数替换不用模型、工具 ID 重写保持稳定、
+MCP 键名反向映射——凡是能用字符串干的事，都不交给模型。</li>
+<li><strong>失败要显式</strong>。<code>POLICY_VIOLATION</code> 不重试、130 不等于 1、
+幽灵 required 剪掉要打 warn——<strong>能看见的失败，才是能修的失败</strong>。</li>
+</ol>
+<p>附录 A 是一份「按问题查」的索引，附录 B 列了全书引用的源码坐标。
+之后你该去读真正的源码了——这本书只是带你走到门口。</p>
+<hr>
+<blockquote>
+<p><strong>本章读完你应该能回答</strong>：
+① headless 是谁判定的，能主动关掉吗？
+——<code>isHeadlessMode()</code> 按环境推断，CI 与 TTY 两条最常触发；
+集成测试可用环境变量豁免。
+② 退出码 130 和 1 有什么区别？
+——130 是被中断（128+SIGINT），1 是真失败。
+③ <code>--output-format</code> 有几个取值？
+——三个：<code>text</code>、<code>json</code>、<code>stream-json</code>。
+④ stream-json 模式下进程崩溃会发生什么？
+——会话已打开时会收敛成一帧 <code>result</code> 收尾，不让流断在半截。
+⑤ 没有权限协议实现时会怎样？
+——进入 <code>isPlainHeadless</code>：隐藏交互工具、禁用 Plan 模式
+（<code>config.ts:1343-1347</code>），因为没有「人」可以做批准。</p>
+</blockquote>
+
+<div class="pager">
+      <a class="prev" href="q18-mcp.html"><span class="lbl">上一篇</span>实战四：写一个 MCP 服务器</a>
+      <a class="next" href="q21-appendix-a.html"><span class="lbl">下一篇</span>附录 A · 按问题查</a>
+    </div>
+</main>
+<nav class="toc"><div class="toc-title">本章目录</div><a href="#sec-1-一-headless-是自动判定的-不是配出来的" class="">一、headless 是自动判定的，不是配出来的</a><a href="#sec-2-二-两条输入路径" class="">二、两条输入路径</a><a href="#sec-3-三-退出码-ci-唯一能听懂的语言" class="">三、退出码：CI 唯一能听懂的语言</a><a href="#sec-4-四-没人能点-允许-时-权限怎么办" class="">四、没人能点「允许」时，权限怎么办</a><a href="#sec-5-五-异常收敛-一条流不能断在半截" class="">五、异常收敛：一条流不能断在半截</a><a href="#sec-6-六-把前面四章接起来-一条真实的-ci-流水线" class="">六、把前面四章接起来：一条真实的 CI 流水线</a><a href="#sec-7-七-工程暗坑" class="">七、工程暗坑</a><a href="#sec-8-八-本章源码索引" class="">八、本章源码索引</a><a href="#sec-9-九-自己动手验证" class="">九、自己动手验证</a><a href="#sec-10-十-全书收尾" class="">十、全书收尾</a></nav>
+</div>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var key = "qw-book-theme";
+  var saved = localStorage.getItem(key);
+  if (saved) root.setAttribute("data-theme", saved);
+  var btn = document.getElementById("theme-toggle");
+  function label() {
+    btn.textContent = root.getAttribute("data-theme") === "dark" ? "浅色" : "深色";
+  }
+  label();
+  btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem(key, next);
+    label();
+  });
+
+  var rail = document.getElementById("progress-rail");
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    rail.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+  if (links.length) {
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+    function mark() {
+      var best = -1;
+      targets.forEach(function (t, i) {
+        if (t && t.getBoundingClientRect().top <= 120) best = i;
+      });
+      links.forEach(function (a, i) { a.classList.toggle("active", i === best); });
+    }
+    document.addEventListener("scroll", mark, { passive: true });
+    mark();
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(
+        function () { return true; },
+        function () { return legacyCopy(text); }
+      );
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function legacyCopy(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  // 代码块复制：双击 HTML 打开时没有 secure context，所以留了 execCommand 退路
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest(".copy");
+    if (!button) return;
+    var lines = button.closest(".code-block").querySelectorAll(".ln");
+    var text = Array.prototype.map.call(lines, function (line) {
+      return line.textContent;
+    }).join("\n"); // 在模板字符串里必须写成 \n，否则产物中字符串字面量跨行、整块脚本语法错误
+    copyText(text).then(function (ok) {
+      button.textContent = ok ? "已复制" : "复制失败";
+      button.classList.toggle("is-done", ok);
+      setTimeout(function () {
+        button.textContent = "复制";
+        button.classList.remove("is-done");
+      }, 1200);
+    });
+  });
+})();
+</script>
+</body>
+</html>

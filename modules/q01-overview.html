@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么 · Qwen Code 源码级教程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body class="is-module">
+<div class="progress-rail" id="progress-rail"></div>
+<header class="topbar">
+  <a class="brand" href="../index.html">Qwen <b>Code</b> 源码级教程</a>
+  <span class="spacer"></span>
+  <button id="theme-toggle" type="button">深色</button>
+</header>
+<div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="active">
+                <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
+                <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
+                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
+                <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
+                <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
+                <span class="code">Q07</span><span>工具与 MCP —— 45 个内置工具如何接进同一张表</span></a><a href="q08-permission-hooks.html" class="">
+                <span class="code">Q08</span><span>权限与钩子 —— 两道闸门如何拦住一次工具调用</span></a></div><div class="part"><div class="part-title">Part C · 上下文与资产</div><a href="q09-context-engineering.html" class="">
+                <span class="code">Q09</span><span>上下文工程 —— 三层记忆与并发飞行</span></a><a href="q10-compaction.html" class="">
+                <span class="code">Q10</span><span>记忆压缩 —— 14 种失败原因与一道熔断</span></a><a href="q11-skills-plugins.html" class="">
+                <span class="code">Q11</span><span>技能与插件 —— 能执行 shell 的提示词</span></a><a href="q12-agents-workflow.html" class="">
+                <span class="code">Q12</span><span>Agent 与 Workflow —— 六种终止模式与四个内置代理</span></a></div><div class="part"><div class="part-title">Part D · 使用侧</div><a href="q13-frameworks.html" class="">
+                <span class="code">Q13</span><span>ACP 与 headless —— 内核怎么接进编辑器与脚本</span></a><a href="q14-ink-tui.html" class="">
+                <span class="code">Q14</span><span>TUI 与 ink —— 为什么要把渲染库 fork 进来</span></a></div><div class="part"><div class="part-title">Part E · 实战拓展</div><a href="q15-custom-tool.html" class="">
+                <span class="code">Q15</span><span>实战一：写一个自定义工具</span></a><a href="q16-hooks.html" class="">
+                <span class="code">Q16</span><span>实战二：写一个钩子——三道拦截</span></a><a href="q17-skills.html" class="">
+                <span class="code">Q17</span><span>实战三：写一个技能——发版一条龙</span></a><a href="q18-mcp.html" class="">
+                <span class="code">Q18</span><span>实战四：写一个 MCP 服务器</span></a><a href="q19-headless.html" class="">
+                <span class="code">Q19</span><span>实战五：headless 流水线</span></a></div><div class="part"><div class="part-title">附录</div><a href="q21-appendix-a.html" class="">
+                <span class="code">附录 A</span><span>附录 A · 按问题查</span></a><a href="q20-appendix-b.html" class="">
+                <span class="code">附录 B</span><span>附录 B · 源码坐标总表</span></a></div></aside>
+<div class="main">
+<main class="prose">
+<header class="module-header">
+      <div class="module-eyebrow">Q01</div>
+      <h1>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</h1>
+      <div class="module-meta">2,127 字 · 62 行代码 · 9 块 · 约 13 分钟</div>
+    </header>
+    <p>打开 <code>sources/qwen-code-1.0.0-preview/</code>，你会看到只有四个包。</p>
+<p>不是一个庞大到需要分类的 monorepo，不是十几个各自为政的工作区，就四个：
+<code>core</code>、<code>cli</code>、<code>resource</code>、<code>ink-shim</code>。</p>
+<p>但行数不客气：<strong>2,541 个源文件、584,003 行 TypeScript</strong>。其中 <code>core</code> 占 33 万行，
+<code>cli</code> 占 23 万行。这本书要做的，是把这 56 万行拆开，告诉你一次对话里
+每一层为什么这么写。</p>
+<h2 id="sec-1-一-这本书讲什么">一、这本书讲什么</h2>
+<p>一句话：<strong>一个产品级 Coding Agent 的 Harness，是怎么从一个 86 行的入口长出来的。</strong></p>
+<p>这里的「Harness」指外壳——不是模型本身，而是把模型变成能干活的 Agent 的那一整套：
+工具调度、权限确认、上下文装配、会话持久化、失败恢复、插件机制。
+模型换一代，外壳的复杂度不会降；外壳写得好不好，直接决定 Agent 能不能上生产。</p>
+<p>全书的主线是一次 <code>query()</code> 的旅程：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">用户输入</span><span class="ln">   │</span><span class="ln">   ├─ Q03 事件总线 ──── 86 行入口如何把活派给三个 handler</span><span class="ln">   ├─ Q04 对话与回合─── 谁决定「再问一次模型」</span><span class="ln">   ├─ Q05 模型层 ────── 九种 provider 怎么收敛成一个接口</span><span class="ln">   ├─ Q06 工具执行 ──── executor + state + snapshot 三分</span><span class="ln">   ├─ Q07 工具与 MCP ── 166 个工具文件的主干</span><span class="ln">   ├─ Q08 权限与钩子 ── 什么时候必须停下来问人</span><span class="ln">   │</span><span class="ln">   ├─ Q09 上下文装配 ── 请求里到底塞了什么</span><span class="ln">   ├─ Q10 记忆与压缩 ── 上下文满了怎么办</span><span class="ln">   ├─ Q11 技能与插件 ── 怎么把新能力装进去</span><span class="ln">   ├─ Q12 子 Agent ──── 一个 Agent 怎么分裂成多个</span><span class="ln">   │</span><span class="ln">   ├─ Q13 ACP/headless ─ 让别的程序驱动它</span><span class="ln">   └─ Q14 TUI/ink ────── 终端界面怎么渲染</span></code></pre></div>
+<p>前八章讲「一次对话怎么跑完」，中间四章讲「跑的过程中用到什么」，
+最后两章讲「怎么从外面驱动它」。Part E 五章是实战，用这套框架做真实扩展。</p>
+<h2 id="sec-2-二-版本与许可-先把话说清楚">二、版本与许可：先把话说清楚</h2>
+<h3 id="sec-3-这是-preview">这是 Preview</h3>
+<p>根 <code>package.json:3</code> 写的是 <code>&quot;version&quot;: &quot;1.0.0&quot;</code>，README 标题写的是
+<code>Qwen Code 1.0 Preview</code>。两者不矛盾——它是 1.0 的预览版。</p>
+<p>官方在 README 里明确了两件事（<code>README.md:7-11</code>）：</p>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/README.md:7-11 --&gt;</p>
+<div class="code-block" data-lang="markdown">
+<div class="code-head"><span class="lang">markdown</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">## Preview status and community contributions</span><span class="ln"></span><span class="ln">Qwen Code 1.0 is in Preview and evolving rapidly. We aim to maintain</span><span class="ln">compatibility with existing features and interfaces, but some interfaces,</span><span class="ln">configuration options, and behaviors may change before the release stabilizes.</span></code></pre></div>
+<p><strong>接口会变。</strong> 所以本书所有论述都绑定在一个具体快照上：<code>1.0.0-preview @ 2026-11-12</code>。
+每章正文不写「最新版如何如何」，只写「这个快照里是这样」。你手上的代码如果行号对不上，
+先确认是不是同一个快照。</p>
+<h3 id="sec-4-apache-2-0-但要看清血统">Apache-2.0，但要看清血统</h3>
+<p><code>LICENSE</code> 是标准 Apache-2.0。但更该读的是 <code>NOTICE</code>：</p>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/NOTICE:9-13 --&gt;</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">Qwen Code is an independently developed project by the Qwen Team. It draws</span><span class="ln">inspiration from other command-line AI coding tools such as Google Gemini CLI</span><span class="ln">(Copyright 2025 Google LLC, licensed under the Apache License, Version 2.0).</span><span class="ln">Files newly added or modified by the Qwen Team carry a "Copyright 2026 Qwen</span><span class="ln">Team" line.</span></code></pre></div>
+<p>这段话把两件事钉死了：</p>
+<ol>
+<li><strong>它是独立开发的项目</strong>，不是 Gemini CLI 的 fork 分支。</li>
+<li><strong>它借鉴了 Gemini CLI</strong>，且文件头用版权行区分来源——
+<code>Copyright 2026 Google LLC</code> 是继承来的，<code>Copyright 2026 Qwen Team</code> 是新写的。</li>
+</ol>
+<p>这个区分在读书时很有用。你会在源码里看到 <code>gemini</code> 开头的文件名、<code>GEMINI_</code> 开头的
+环境变量、<code>GeminiChat</code> 之类的类型名。这些<strong>多数是历史命名</strong>，实现早已重写。
+后面的章节遇到这类名字，会明确指出「名字是历史，实现已重写」，不让你浪费时间考古。</p>
+<h3 id="sec-5-关于-合并">关于「合并」</h3>
+<p>changelog 第一条说得很直白（<code>changelog/qwen/changelog.md:9</code>）：</p>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/changelog/qwen/changelog.md:7-9 --&gt;</p>
+<div class="code-block" data-lang="markdown">
+<div class="code-head"><span class="lang">markdown</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">## CLI 1.0.0-preview</span><span class="ln"></span><span class="ln">- Introduce Qwen Code 1.0 Preview, bringing together the agent capabilities of</span><span class="ln">  Qoder and Qwen Code for code understanding, implementation, debugging,</span><span class="ln">  and testing.</span></code></pre></div>
+<p>Qoder 和 Qwen Code 的 Agent 能力合并进了同一套开源内核。
+这在代码里的落点非常具体——<code>core/src/qoder/</code> 目录（4,831 行）和
+<code>cli/src/auth/qoderProviders.ts</code>。登录过 Qoder 账号后，模型列表里会多出 Qoder 的模型
+（<code>qoderProviders.ts:24-29</code> 的 <code>isQoderAccountConfigured()</code>）。</p>
+<p>我们不做商业判断，只陈述代码事实：<strong>这个仓库里有 Qoder 的客户端实现</strong>，
+有账号检测、模型目录、专用推理通道。至于服务端行为和商业发行版的差异，不在本书范围。</p>
+<h2 id="sec-6-三-四个包怎么分工">三、四个包怎么分工</h2>
+<p><code>package.json:11-13</code> 的 workspaces 只有一行 <code>&quot;packages/*&quot;</code>，实际展开是四个：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">packages/core        1,381 文件 / 332,669 行   ← UI 无关的运行时</span><span class="ln">packages/cli         1,103 文件 / 236,821 行   ← 可执行 + TUI + 入口框架</span><span class="ln">packages/resource       57 文件 /  14,513 行   ← Settings 与资源服务</span><span class="ln">packages/ink-shim        0 文件 /       0 行   ← 8 行的 Ink 占位包</span></code></pre></div>
+<p>（数字来自 <code>node scripts/source-index.mjs</code> 实测，见附录的源码索引。）</p>
+<p>四个包的依赖方向很清楚：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">  cli ──────────&gt; core ──────────&gt; resource</span><span class="ln">   │                                 ^</span><span class="ln">   └─────────────────────────────────┘</span><span class="ln"></span><span class="ln">  ink-shim  ← 仅作为 npm 依赖名存在（根 package.json 的 dependencies）</span></code></pre></div>
+<ul>
+<li><strong><code>core</code> 是大脑</strong>：所有 Agent 逻辑在这里，且<strong>完全不依赖 UI</strong>。
+它不知道终端长什么样，不知道有没有图形界面。这是它能同时被 CLI、桌面端、
+Web 端、IDE 插件复用的前提。</li>
+<li><strong><code>cli</code> 是外壳集合</strong>：<code>qwen</code> 命令、交互式 TUI、headless 模式、ACP 服务端、
+daemon——全都在这一个包里，通过 <code>framework/</code> 下的多个入口类分派。</li>
+<li><strong><code>resource</code> 是配置底座</strong>：Settings 服务、资源加载。<code>core</code> 依赖它，
+而不是自己管配置。</li>
+<li><strong><code>ink-shim</code> 是个空壳</strong>：只有 8 行，用来占住 <code>ink</code> 这个依赖名，
+真正的 Ink 兼容层在 <code>cli/src/ink/</code>（22,557 行）。这个设计后面 Q14 会讲。</li>
+</ul>
+<h2 id="sec-7-四-把仓库跑起来">四、把仓库跑起来</h2>
+<h3 id="sec-8-前提">前提</h3>
+<p>Node <code>&gt;=20.18.1</code>（<code>package.json:7-9</code>）。比 Pi 的 <code>&gt;=22.19</code> 宽松，
+因为你不需要用 Node 直接剥 TypeScript——这个仓库走的是先构建再运行。</p>
+<h3 id="sec-9-三步">三步</h3>
+<div class="code-block" data-lang="powershell">
+<div class="code-head"><span class="lang">powershell</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">cd sources/qwen-code-1.0.0-preview</span><span class="ln"></span><span class="ln"># 1. 装依赖（npm workspaces，不是 pnpm）</span><span class="ln">npm install --no-audit --no-fund</span><span class="ln"></span><span class="ln"># 2. 构建</span><span class="ln">npm run build</span><span class="ln"></span><span class="ln"># 3. 启动</span><span class="ln">npm run start</span></code></pre></div>
+<p><code>npm run start</code> 实际执行的是 <code>node packages/cli/dist/bin.js</code>（<code>package.json:15</code>）——
+先构建再运行，不 build 就跑不起来。这点和 Pi 相反：Pi 可以用 <code>--import</code> 直接跑 src，
+Qwen 必须过一遍构建产物。</p>
+<blockquote>
+<p><strong>实操提示（本机实测）</strong>：<code>core</code> 有 68 个依赖，其中 <code>sharp</code>、<code>keytar</code>、
+<code>@lydell/node-pty</code> 是原生模块，在内网 registry 下可能装不上。
+本书的实验设计尽量避开「必须装完依赖」的路径——读码类的验证（大部分章节）
+只用 Node 读文件即可，不需要 <code>node_modules</code>。</p>
+</blockquote>
+<h3 id="sec-10-不需要装依赖也能做的验证">不需要装依赖也能做的验证</h3>
+<p>这是本书的一个设计原则：<strong>能纯读文件验证的，就不要求你装环境</strong>。</p>
+<div class="code-block" data-lang="powershell">
+<div class="code-head"><span class="lang">powershell</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"># 看四个包的目录数（核心不是 0 就说明包在）</span><span class="ln">node -e "console.log(require('fs').readdirSync('packages').join(' '))"</span></code></pre></div>
+<p>后面每章的「自己动手验证」小节，都会优先给这种只用 Node 内置模块的命令。</p>
+<h2 id="sec-11-五-这本书怎么读">五、这本书怎么读</h2>
+<h3 id="sec-12-三条路线">三条路线</h3>
+<p><strong>路线一：只想理解架构（约 8 小时）</strong>
+Part A → Q03（事件总线）→ Q04（对话回合）→ Q06（工具执行）→ Q09（上下文）→ Q13（ACP）。
+跳过 Q05 的 provider 细节、Q07 的工具清单、Q14 的 TUI。</p>
+<p><strong>路线二：想改它（约 15 小时）</strong>
+全读，但 Part B 可以略读 Q05/Q07 的清单部分。重点在 Part C 与 Part E——
+那里讲的是「扩展点在哪、契约是什么」。</p>
+<p><strong>路线三：想把它接进自己的系统（约 5 小时）</strong>
+Q03 → Q13（ACP/headless）→ Q19（自动化实战）→ Q15（Skill）→ Q17（MCP）。
+这条路线不关心内核细节，只关心「怎么驱动它、怎么扩展它」。</p>
+<h3 id="sec-13-每个论断都带坐标">每个论断都带坐标</h3>
+<p>正文里所有源码引用形如 <code>packages/core/src/event-bus/bus.ts:114</code>，
+你可以直接跳到那一行。代码块上方的注释也标了文件与行号范围，方便对照。</p>
+<p>行号是机器校验的：<code>node scripts/fact-check.mjs</code> 会扫全书引用，
+检查文件是否存在、行号是否越界。<strong>任何越界都会让构建失败。</strong></p>
+<h3 id="sec-14-与-pi-的对照">与 Pi 的对照</h3>
+<p>本书会不时和 Pi Agent 对照（本地已有 <code>sources/pi-main/</code>）。这不是为了比较优劣，
+而是因为两套实现走了不同的路，对照能看清「同一个问题有多少种解法」。</p>
+<p>对照只写在必要的地方：循环范式、工具调度、会话持久化、扩展机制。
+每处对照都给双方的源码坐标，你可以自己去读。</p>
+<p>三本书的分工，用一张表说清：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>书</th>
+<th>回答的问题</th>
+<th>教学口径体量</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pi Agent</td>
+<td>Agent 本体怎么造（极简内核）</td>
+<td>23 万行</td>
+</tr>
+<tr>
+<td><strong>Qwen Code（本书）</strong></td>
+<td>产品级 Harness 怎么长</td>
+<td><strong>56 万行</strong></td>
+</tr>
+<tr>
+<td>Better Harness</td>
+<td>Agent 外围工程怎么评（证据评审）</td>
+<td>9 万行</td>
+</tr>
+</tbody>
+</table></div>
+<p>Pi 用 <code>while</code> 循环加分支讲清一个 Agent 的全部语义；
+Qwen 用 4 个包、55 个 core 子目录、一条事件总线应对真实产品的全部场景。
+前者适合学原理，后者适合学工程。</p>
+<h2 id="sec-15-六-体量分布-为什么章节权重要这么分">六、体量分布：为什么章节权重要这么分</h2>
+<p>计数口径：<code>.ts/.tsx</code>，排除 test/spec/<code>__snapshots__</code>/node_modules/dist；
+行数 = <code>split('\n').length</code>。这个口径贯穿全书，附录的源码索引也用同一套。</p>
+<h3 id="sec-16-core-的前十大目录">core 的前十大目录</h3>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">utils            208 文件 / 47,182   ← 工具函数，散落各章</span><span class="ln"> tools            166 文件 / 46,915   ← Q07</span><span class="ln"> services          84 文件 / 34,165   ← Q10 + Q05</span><span class="ln"> plugins           49 文件 / 16,111   ← Q11</span><span class="ln"> agents            38 文件 / 14,080   ← Q12</span><span class="ln"> mcp               64 文件 / 13,260   ← Q07</span><span class="ln"> provider          69 文件 / 12,601   ← Q05</span><span class="ln"> permissions       54 文件 / 11,575   ← Q08</span><span class="ln"> hooks             23 文件 / 11,279   ← Q08</span><span class="ln"> config            24 文件 / 10,334   ← Q02</span></code></pre></div>
+<p>有一个结构值得注意：<strong>最大的目录不是最重要的目录</strong>。
+<code>utils/</code> 占 4.7 万行，全是零散工具函数，不单独立章；
+<code>core/</code> 只有 7,699 行，却是整个系统的心脏（Q03 的主题）。</p>
+<h3 id="sec-17-章节权重是这么定的">章节权重是这么定的</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>章节</th>
+<th>对应体量</th>
+<th>选它的理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q03 事件总线</td>
+<td>~1,800 行</td>
+<td>全书心脏，看懂了后面的都顺</td>
+</tr>
+<tr>
+<td>Q04 对话/回合</td>
+<td>~1,500 行</td>
+<td>决策逻辑集中地</td>
+</tr>
+<tr>
+<td>Q06 工具执行</td>
+<td>~5,000 行</td>
+<td>与 Pi 的 8,577 行调度器直接对照</td>
+</tr>
+<tr>
+<td>Q10 记忆/压缩</td>
+<td>~24,000 行</td>
+<td>上下文工程必修，compression-v2 是独立子系统</td>
+</tr>
+<tr>
+<td>Q11 技能/插件</td>
+<td>~28,000 行</td>
+<td>扩展生态的主战场</td>
+</tr>
+</tbody>
+</table></div>
+<p>剩下十个 core 子目录（<code>codemode</code>、<code>sessions</code>、<code>workflows</code>、<code>event-bus</code>……）
+各自分散到最近的章节，不单独立章，避免把书切成碎片。</p>
+<h2 id="sec-18-七-本章小结">七、本章小结</h2>
+<ul>
+<li>Qwen Code 1.0 Preview 是 <strong>4 个包、2,541 个文件、584,003 行</strong>的开源 Coding Agent。</li>
+<li><code>core</code> 是 UI 无关的运行时（33 万行），<code>cli</code> 是外壳集合（23 万行），
+<code>resource</code> 是配置底座，<code>ink-shim</code> 是 8 行的空壳。</li>
+<li>Apache-2.0；借鉴 Gemini CLI 但独立开发，文件头版权行区分来源。</li>
+<li>Qoder 的 Agent 能力合并在 <code>core/src/qoder/</code>，是客户端实现，服务端不在本书范围。</li>
+<li><strong>必须构建才能运行</strong>（<code>npm run build</code> → <code>npm run start</code>），这点和 Pi 不同。</li>
+<li>目录体量与重要性不成正比：<code>utils/</code> 最大但不立章，<code>core/</code> 最小却是心脏。</li>
+</ul>
+<p>下一章 Q02 把四个包摊开，画出完整的仓库地图——
+你会看到 <code>core</code> 下面有 <strong>55 个顶层目录</strong>，以及它们各自站在哪一层。</p>
+
+<div class="pager">
+      <span></span>
+      <a class="next" href="q02-repo-map.html"><span class="lbl">下一篇</span>仓库地图 —— 4 个包、55 个目录、7 个入口</a>
+    </div>
+</main>
+<nav class="toc"><div class="toc-title">本章目录</div><a href="#sec-1-一-这本书讲什么" class="">一、这本书讲什么</a><a href="#sec-2-二-版本与许可-先把话说清楚" class="">二、版本与许可：先把话说清楚</a><a href="#sec-3-这是-preview" class="lv3">这是 Preview</a><a href="#sec-4-apache-2-0-但要看清血统" class="lv3">Apache-2.0，但要看清血统</a><a href="#sec-5-关于-合并" class="lv3">关于「合并」</a><a href="#sec-6-三-四个包怎么分工" class="">三、四个包怎么分工</a><a href="#sec-7-四-把仓库跑起来" class="">四、把仓库跑起来</a><a href="#sec-8-前提" class="lv3">前提</a><a href="#sec-9-三步" class="lv3">三步</a><a href="#sec-10-不需要装依赖也能做的验证" class="lv3">不需要装依赖也能做的验证</a><a href="#sec-11-五-这本书怎么读" class="">五、这本书怎么读</a><a href="#sec-12-三条路线" class="lv3">三条路线</a><a href="#sec-13-每个论断都带坐标" class="lv3">每个论断都带坐标</a><a href="#sec-14-与-pi-的对照" class="lv3">与 Pi 的对照</a><a href="#sec-15-六-体量分布-为什么章节权重要这么分" class="">六、体量分布：为什么章节权重要这么分</a><a href="#sec-16-core-的前十大目录" class="lv3">core 的前十大目录</a><a href="#sec-17-章节权重是这么定的" class="lv3">章节权重是这么定的</a><a href="#sec-18-七-本章小结" class="">七、本章小结</a></nav>
+</div>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var key = "qw-book-theme";
+  var saved = localStorage.getItem(key);
+  if (saved) root.setAttribute("data-theme", saved);
+  var btn = document.getElementById("theme-toggle");
+  function label() {
+    btn.textContent = root.getAttribute("data-theme") === "dark" ? "浅色" : "深色";
+  }
+  label();
+  btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem(key, next);
+    label();
+  });
+
+  var rail = document.getElementById("progress-rail");
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    rail.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+  if (links.length) {
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+    function mark() {
+      var best = -1;
+      targets.forEach(function (t, i) {
+        if (t && t.getBoundingClientRect().top <= 120) best = i;
+      });
+      links.forEach(function (a, i) { a.classList.toggle("active", i === best); });
+    }
+    document.addEventListener("scroll", mark, { passive: true });
+    mark();
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(
+        function () { return true; },
+        function () { return legacyCopy(text); }
+      );
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function legacyCopy(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  // 代码块复制：双击 HTML 打开时没有 secure context，所以留了 execCommand 退路
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest(".copy");
+    if (!button) return;
+    var lines = button.closest(".code-block").querySelectorAll(".ln");
+    var text = Array.prototype.map.call(lines, function (line) {
+      return line.textContent;
+    }).join("\n"); // 在模板字符串里必须写成 \n，否则产物中字符串字面量跨行、整块脚本语法错误
+    copyText(text).then(function (ok) {
+      button.textContent = ok ? "已复制" : "复制失败";
+      button.classList.toggle("is-done", ok);
+      setTimeout(function () {
+        button.textContent = "复制";
+        button.classList.remove("is-done");
+      }, 1200);
+    });
+  });
+})();
+</script>
+</body>
+</html>

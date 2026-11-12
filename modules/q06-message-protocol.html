@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>消息协议 —— 七种消息如何投影成一次请求 · Qwen Code 源码级教程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body class="is-module">
+<div class="progress-rail" id="progress-rail"></div>
+<header class="topbar">
+  <a class="brand" href="../index.html">Qwen <b>Code</b> 源码级教程</a>
+  <span class="spacer"></span>
+  <button id="theme-toggle" type="button">深色</button>
+</header>
+<div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
+                <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
+                <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
+                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
+                <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="active">
+                <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
+                <span class="code">Q07</span><span>工具与 MCP —— 45 个内置工具如何接进同一张表</span></a><a href="q08-permission-hooks.html" class="">
+                <span class="code">Q08</span><span>权限与钩子 —— 两道闸门如何拦住一次工具调用</span></a></div><div class="part"><div class="part-title">Part C · 上下文与资产</div><a href="q09-context-engineering.html" class="">
+                <span class="code">Q09</span><span>上下文工程 —— 三层记忆与并发飞行</span></a><a href="q10-compaction.html" class="">
+                <span class="code">Q10</span><span>记忆压缩 —— 14 种失败原因与一道熔断</span></a><a href="q11-skills-plugins.html" class="">
+                <span class="code">Q11</span><span>技能与插件 —— 能执行 shell 的提示词</span></a><a href="q12-agents-workflow.html" class="">
+                <span class="code">Q12</span><span>Agent 与 Workflow —— 六种终止模式与四个内置代理</span></a></div><div class="part"><div class="part-title">Part D · 使用侧</div><a href="q13-frameworks.html" class="">
+                <span class="code">Q13</span><span>ACP 与 headless —— 内核怎么接进编辑器与脚本</span></a><a href="q14-ink-tui.html" class="">
+                <span class="code">Q14</span><span>TUI 与 ink —— 为什么要把渲染库 fork 进来</span></a></div><div class="part"><div class="part-title">Part E · 实战拓展</div><a href="q15-custom-tool.html" class="">
+                <span class="code">Q15</span><span>实战一：写一个自定义工具</span></a><a href="q16-hooks.html" class="">
+                <span class="code">Q16</span><span>实战二：写一个钩子——三道拦截</span></a><a href="q17-skills.html" class="">
+                <span class="code">Q17</span><span>实战三：写一个技能——发版一条龙</span></a><a href="q18-mcp.html" class="">
+                <span class="code">Q18</span><span>实战四：写一个 MCP 服务器</span></a><a href="q19-headless.html" class="">
+                <span class="code">Q19</span><span>实战五：headless 流水线</span></a></div><div class="part"><div class="part-title">附录</div><a href="q21-appendix-a.html" class="">
+                <span class="code">附录 A</span><span>附录 A · 按问题查</span></a><a href="q20-appendix-b.html" class="">
+                <span class="code">附录 B</span><span>附录 B · 源码坐标总表</span></a></div></aside>
+<div class="main">
+<main class="prose">
+<header class="module-header">
+      <div class="module-eyebrow">Q06</div>
+      <h1>消息协议 —— 七种消息如何投影成一次请求</h1>
+      <div class="module-meta">1,674 字 · 84 行代码 · 13 块 · 约 14 分钟</div>
+    </header>
+    <p>Q05 结尾留了个黑箱：<code>normalizeMessagesForAPI</code>。
+本章打开它。</p>
+<p>核心问题是：<strong>内部为什么不能直接用 provider 的格式？</strong>
+答案藏在 <code>packages/core/src/protocol/transcript/message.ts</code> 的首行注释里（<code>:89</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">/** 稳定会话载荷；transcript 直接存储此形状，不随推理契约变化。 */</span></span><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">interface</span> AssistantMessagePayload {</span></code></pre></div>
+<p>关键在「不随推理契约变化」。
+会话历史要落盘、要跨版本读回、要被压缩和重放——
+而 provider 的请求格式每换一个模型就可能变。
+两者必须解耦，中间就是要一层投影。</p>
+<h2 id="sec-1-一-七种消息">一、七种消息</h2>
+<p><code>Message</code> 联合体（<code>packages/core/src/protocol/transcript/message.ts:561-568</code>）
+正好七个成员：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">type</span> Message =</span><span class="ln">  | UserMessage</span><span class="ln">  | AssistantMessage</span><span class="ln">  | SystemMessage</span><span class="ln">  | ProgressMessage</span><span class="ln">  | AttachmentMessage</span><span class="ln">  | ToolUseSummaryMessage</span><span class="ln">  | TombstoneMessage;</span></code></pre></div>
+<p>七种的分工：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>类型</th>
+<th>谁产生</th>
+<th>进模型吗</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user</code></td>
+<td>用户输入、工具结果</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>assistant</code></td>
+<td>模型响应（按块拆）</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>system</code></td>
+<td>系统提示、压缩边界</td>
+<td>部分（<code>subtype</code> 决定）</td>
+</tr>
+<tr>
+<td><code>progress</code></td>
+<td>中间进度播报</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>attachment</code></td>
+<td>附件注入（钩子、文件恢复）</td>
+<td>是（转 user 内容）</td>
+</tr>
+<tr>
+<td><code>toolUseSummary</code></td>
+<td>工具调用摘要</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>tombstone</code></td>
+<td>标记待删除的助手内容</td>
+<td>否</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>tombstone</code> 值得单说。它的注释（<code>:540-545</code>）写得坦白：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"> * This <span class="tok-kw">is</span> useful <span class="tok-kw">for</span> streaming flows that may emit partial assistant content</span><span class="ln"> * before deciding it should be discarded. The <span class="tok-kw">type</span> exists now so runtime and</span><span class="ln"> * transcript code can evolve without changing the message union later.</span></code></pre></div>
+<p>也就是说：这个类型当前<strong>可能没被用到</strong>，先占位。
+因为一旦 <code>Message</code> 联合体定型，后面再加成员就要改所有 switch。
+预留一个比事后改类型便宜——这是个很务实的取舍。</p>
+<h2 id="sec-2-二-内容块只有四种">二、内容块只有四种</h2>
+<p><code>ContentBlock</code>（<code>:83-87</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">type</span> ContentBlock =</span><span class="ln">  | TextBlock</span><span class="ln">  | ThinkingBlock</span><span class="ln">  | RedactedThinkingBlock</span><span class="ln">  | ToolUseBlock;</span></code></pre></div>
+<p>四个，不多不少。注意 <code>RedactedThinkingBlock</code>——
+它是「思考内容被安全策略涂黑」的占位。
+有些 provider 返回思考摘要，有些返回被脱敏的标记，
+两者必须都能进历史，否则回放时思考链会断。</p>
+<p>用户消息侧的块类型是另一套（<code>:118-121</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">type</span> ContentBlockParam =</span><span class="ln">  | TextBlockParam</span><span class="ln">  | ImageBlockParam</span><span class="ln">  | ToolResultBlockParam;</span></code></pre></div>
+<p>比较两套：助手侧有 <code>Thinking</code> 没有 <code>ToolResult</code>，
+用户侧有 <code>ToolResult</code> 没有 <code>Thinking</code>。
+这个不对称来自协议本身：工具结果永远以 user 角色回传。</p>
+<h2 id="sec-3-三-五个-is-标志">三、五个 is 标志</h2>
+<p><code>MessageBase</code> 里有五个 <code>is*</code> 布尔（<code>:141-149</code>）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>标志</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>isMeta</code></td>
+<td>合成消息，非真实用户/助手交互</td>
+</tr>
+<tr>
+<td><code>isVisibleInTranscriptOnly</code></td>
+<td>转录视图可见，实时视图隐藏</td>
+</tr>
+<tr>
+<td><code>isVirtual</code></td>
+<td>运行时包装，<strong>不回传模型</strong></td>
+</tr>
+<tr>
+<td><code>isCompactSummary</code></td>
+<td>压缩摘要边界</td>
+</tr>
+<tr>
+<td><code>isCompactionPrefix</code></td>
+<td>分段压缩保留的前缀</td>
+</tr>
+</tbody>
+</table></div>
+<p>五个标志在 <code>normalizeMessagesForAPI</code> 里各司其职，最常用的三个：</p>
+<ul>
+<li><code>isVirtual</code> —— 直接过滤掉（<code>:516</code>）；</li>
+<li><code>isCompactSummary</code> + <code>isCompactionPrefix</code> —— 触发分区归一化（<code>:477-508</code>）；</li>
+<li><code>isMeta</code> —— 保留，但下游按需隐藏。</li>
+</ul>
+<h2 id="sec-4-四-七道工序">四、七道工序</h2>
+<p><code>normalizeMessagesForAPI</code>（<code>packages/core/src/protocol/provider/request-converter.ts:473-532</code>）
+共 60 行，主体就是七个赋值：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">const</span> compactSummary = messages.<span class="tok-fn">find</span>(</span><span class="ln">  (m) =&gt; m.isCompactSummary &amp;&amp; m.isCompactionPrefix,</span><span class="ln">);</span><span class="ln"><span class="tok-kw">if</span> (compactSummary) {</span><span class="ln">  <span class="tok-com">// ... 分区递归，见下一节</span></span><span class="ln">}</span><span class="ln"><span class="tok-kw">const</span> reordered = <span class="tok-fn">reorderRawAttachmentsForAPI</span>(</span><span class="ln">  <span class="tok-fn">projectRefusalContext</span>(messages),</span><span class="ln">);</span><span class="ln"><span class="tok-kw">const</span> stripTargets = <span class="tok-fn">buildRawStripTargets</span>(reordered);</span><span class="ln"><span class="tok-kw">const</span> prepared = <span class="tok-fn">mergeAssistantFragments</span>(</span><span class="ln">  reordered.<span class="tok-fn">filter</span>(</span><span class="ln">    (msg) =&gt;</span><span class="ln">      !msg.isVirtual &amp;&amp;</span><span class="ln">      !<span class="tok-fn">isRawApiErrorMarkerMessage</span>(msg) &amp;&amp;</span><span class="ln">      (msg.<span class="tok-kw">type</span> === <span class="tok-str">'user'</span> ||</span><span class="ln">        msg.<span class="tok-kw">type</span> === <span class="tok-str">'assistant'</span> ||</span><span class="ln">        msg.<span class="tok-kw">type</span> === <span class="tok-str">'attachment'</span>),</span><span class="ln">  ),</span><span class="ln">);</span><span class="ln"><span class="tok-kw">const</span> projected = <span class="tok-fn">filterAndConvert</span>(</span><span class="ln">  prepared,</span><span class="ln">  stripTargets,</span><span class="ln">  options.targetCustomProviderId,</span><span class="ln">);</span><span class="ln"><span class="tok-kw">const</span> normalized = <span class="tok-fn">mergeUserMessages</span>(projected);</span><span class="ln"><span class="tok-kw">const</span> sanitized = <span class="tok-fn">sanitizeImages</span>(normalized, <span class="tok-kw">true</span>);</span><span class="ln"><span class="tok-fn">validateImagesForAPI</span>(sanitized);</span><span class="ln"><span class="tok-kw">return</span> <span class="tok-fn">sanitizeErrorToolResults</span>(sanitized);</span></code></pre></div>
+<p>七道工序，每道解决一类「历史不合协议」的问题：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>工序</th>
+<th>解决什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>reorderRawAttachmentsForAPI</code></td>
+<td>附件位置错乱</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>buildRawStripTargets</code></td>
+<td>找出要剔掉的原始文本</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>mergeAssistantFragments</code></td>
+<td>同一响应的碎片合并</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>filterAndConvert</code></td>
+<td>类型转换 + 剔除</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>mergeUserMessages</code></td>
+<td>相邻 user 消息合并</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>sanitizeImages</code></td>
+<td>图片降级与限额</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>sanitizeErrorToolResults</code></td>
+<td>错误结果清洗</td>
+</tr>
+</tbody>
+</table></div>
+<p>注意 <code>mergeAssistantFragments</code> 在 <code>filterAndConvert</code> <strong>之前</strong>。
+顺序不能反：先合并助手碎片，再转换类型，否则一个响应的多个块
+会被转成多条独立消息，合并逻辑就找不到它们了。</p>
+<p>同理 <code>mergeUserMessages</code> 必须在转换<strong>之后</strong>——
+因为 <code>attachment</code> 是在 <code>filterAndConvert</code> 里才变成 user 消息的，
+合并要等它们都变成 user 才能做。</p>
+<h2 id="sec-5-五-压缩前缀为什么要分区">五、压缩前缀为什么要分区</h2>
+<p><code>normalizeMessagesForAPI</code> 开头那段（<code>:477-508</code>）是全函数最绕的部分。
+注释解释了原因：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">// A compacted session prefix is a separate user-context region. Normalize</span></span><span class="ln"><span class="tok-com">// each region before merging users so the ordinary attachment/tool folding</span></span><span class="ln"><span class="tok-com">// rules cannot move announcements into a retained historical tool result.</span></span></code></pre></div>
+<p>压缩后的历史长这样：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">[prefix 消息...]  [摘要边界]  [body 消息...]</span></code></pre></div>
+<p>三段要<strong>各自归一化</strong>，最后只做一次 <code>mergeUserMessages</code> 合并。
+如果整体一起归一化，附件折叠规则可能把 prefix 里的通知
+塞进 body 里的某个工具结果——历史就被改坏了。</p>
+<p>代码先按标志把消息切成三组，再递归调自己：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">return</span> <span class="tok-fn">mergeUserMessages</span>([</span><span class="ln">  ...<span class="tok-fn">normalizeMessagesForAPI</span>(</span><span class="ln">    [...body.<span class="tok-fn">slice</span>(<span class="tok-num">0</span>, at), ...prefix].<span class="tok-kw">map</span>(unmark),</span><span class="ln">    options,</span><span class="ln">  ),</span><span class="ln">  ...<span class="tok-fn">normalizeMessagesForAPI</span>(recovery.<span class="tok-kw">map</span>(unmark), options),</span><span class="ln">  ...<span class="tok-fn">normalizeMessagesForAPI</span>(body.<span class="tok-fn">slice</span>(at).<span class="tok-kw">map</span>(unmark), options),</span><span class="ln">]);</span></code></pre></div>
+<p><code>unmark</code> 是把 <code>isCompactionPrefix</code> 清掉，避免递归里无限触发同一分支。
+这是典型的「用标志做一次性入口」写法。</p>
+<h2 id="sec-6-六-工具-id-重写-为什么必须保持稳定">六、工具 ID 重写：为什么必须保持稳定</h2>
+<p><code>ensureToolResultPairing</code>（<code>:97-168</code>，72 行）处理一个更隐蔽的问题：
+<strong>工具调用与结果的配对</strong>。</p>
+<p>三种异常各自处理：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>异常</th>
+<th>处理</th>
+<th>行</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>孤儿 tool_result（前面没有对应调用）</td>
+<td>丢弃</td>
+<td><code>:106-111</code></td>
+</tr>
+<tr>
+<td>同一轮内重复的 tool_use ID</td>
+<td>后来的丢弃</td>
+<td><code>:121-126</code></td>
+</tr>
+<tr>
+<td>跨轮重复的 ID</td>
+<td>重写成唯一 ID</td>
+<td><code>:127-133</code></td>
+</tr>
+<tr>
+<td>调用没有结果</td>
+<td>补一条 <code>isError: true</code> 占位</td>
+<td><code>:154-163</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>第三种最关键。重写 ID 时不能随便生成新的——<code>makeUniqueToolUseId</code>
+的注释（<code>:181-190</code>）说：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"> * The result depends only on the history prefix already walked, so repeated</span><span class="ln"> * conversions <span class="tok-kw">of</span> a growing history keep an identical prefix, preserving</span><span class="ln"> * provider prompt caching.</span></code></pre></div>
+<p><strong>重写结果只依赖已走过的历史前缀。</strong> 这样同一段历史反复转换，
+前缀部分永远得到相同的 ID——prompt 缓存才能命中。
+如果改用随机 ID，每次请求前缀都变，缓存全失效。</p>
+<p><code>rewriteStates</code> 这个 Map 是为了记住「上次探到哪个后缀」，
+避免每次重写都从头扫一遍碰撞区间。</p>
+<h2 id="sec-7-七-工程暗坑">七、工程暗坑</h2>
+<p><strong>1. <code>mergeAssistantFragments</code> 与 <code>mergeUserMessages</code> 不能调换顺序</strong>
+前者要看到原始 <code>Message</code> 类型，后者要看到转换后的 <code>ModelStreamMessage</code>。
+调换会让助手碎片被当成多条响应，usage 重复累加。</p>
+<p><strong>2. <code>isVirtual</code> 的消息绝不能进请求</strong>
+<code>:516</code> 的过滤是硬性的。<code>isVirtual</code> 表示「运行时包装」，
+比如给 UI 看的进度消息，模型不该看见。
+如果漏过滤，模型会收到自己没说过的话。</p>
+<p><strong>3. 压缩分区递归时 <code>unmark</code> 必须做</strong>
+不做的话，递归的子调用又会命中 <code>compactSummary</code> 分支，
+无限递归直到栈溢出。</p>
+<p><strong>4. <code>SYNTHETIC_TOOL_INPUT_FIELDS</code> 是黑名单不是白名单</strong>
+<code>:544-547</code> 只有两个字段：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">const</span> SYNTHETIC_TOOL_INPUT_FIELDS = <span class="tok-kw">new</span> <span class="tok-fn">Set</span>([</span><span class="ln">  <span class="tok-str">'modified_by_user'</span>,</span><span class="ln">  <span class="tok-str">'ai_proposed_content'</span>,</span><span class="ln">]);</span></code></pre></div>
+<p>这是<strong>剔除</strong>清单，只列 UI 注入的字段。
+新加 UI 字段时必须同步更新这里，否则会被当成工具参数发给模型。
+<code>EXIT_PLAN_MODE_KEYS_TO_STRIP</code>（<code>:550-559</code>）列了 9 个，
+<code>EDIT_KEYS_TO_STRIP</code>（<code>:561-564</code>）列了 3 个，都是同样的道理。</p>
+<p><strong>5. 图片限额在 <code>sanitizeImages</code> 与 <code>validateImagesForAPI</code> 两处</strong>
+<code>getMaxRequestImages()</code>（<code>:1030</code>）给上限，<code>limitImagesForAPI</code>（<code>:1037</code>）
+截断，<code>validateImagesForAPI</code>（<code>:969</code>）校验。
+截断后还要校验——因为截断可能把某个工具结果的配对图片删掉，
+导致结构不合法。</p>
+<h2 id="sec-8-八-本章源码索引">八、本章源码索引</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>行数</th>
+<th>本章用到的位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packages/core/src/protocol/transcript/message.ts</code></td>
+<td>573</td>
+<td><code>:83-87</code> ContentBlock，<code>:133-174</code> MessageBase</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:540-550</code> Tombstone，<code>:561-568</code> Message 联合体</td>
+</tr>
+<tr>
+<td><code>packages/core/src/protocol/transcript/conversions.ts</code></td>
+<td>445</td>
+<td>消息创建与转换</td>
+</tr>
+<tr>
+<td><code>packages/core/src/protocol/transcript/message-utils.ts</code></td>
+<td>548</td>
+<td>消息工具函数</td>
+</tr>
+<tr>
+<td><code>packages/core/src/protocol/provider/request-converter.ts</code></td>
+<td>1,294</td>
+<td><code>:97-168</code> ensureToolResultPairing</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:473-532</code> normalizeMessagesForAPI，<code>:544-564</code> strip 集合</td>
+</tr>
+<tr>
+<td><code>packages/core/src/protocol/provider/sse-client.ts</code></td>
+<td>640</td>
+<td>SSE 流解析</td>
+</tr>
+<tr>
+<td><code>packages/core/src/protocol/schemas/sdk-message.ts</code></td>
+<td>1,554</td>
+<td>SDK 侧消息 schema</td>
+</tr>
+<tr>
+<td><code>packages/core/src/protocol/wire/control.ts</code></td>
+<td>534</td>
+<td>控制帧协议</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="sec-9-九-自己动手验证">九、自己动手验证</h2>
+<div class="code-block" data-lang="bash">
+<div class="code-head"><span class="lang">bash</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">node qw-examples/check/06-message-protocol.mjs</span></code></pre></div>
+<p>预期输出：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">Message union: 7</span><span class="ln">ContentBlock: 4</span><span class="ln">is* flags: 5</span><span class="ln">pipeline steps: 7</span><span class="ln">strip sets: 4</span><span class="ln">protocol version: 1.5.0</span><span class="ln">  573 protocol/transcript/message.ts</span><span class="ln">  445 protocol/transcript/conversions.ts</span><span class="ln">  548 protocol/transcript/message-utils.ts</span><span class="ln"> 1294 protocol/provider/request-converter.ts</span><span class="ln">  640 protocol/provider/sse-client.ts</span><span class="ln"> 1554 protocol/schemas/sdk-message.ts</span><span class="ln">  534 protocol/wire/control.ts</span></code></pre></div>
+<p>改一处试试：把 <code>ensureToolResultPairing</code> 里的 <code>makeUniqueToolUseId</code>
+换成 <code>randomUUID()</code>。
+跑一次长会话（20 轮以上，中间有跨轮重复 ID 的场景），
+观察 provider 返回的 <code>cached_tokens</code>：会从几千掉到 0。
+这就是注释里「preserving provider prompt caching」的实测代价。</p>
+<h2 id="sec-10-十-下一步">十、下一步</h2>
+<p>本章讲完了「历史怎么变成请求」，但请求里还有一大块没碰：<strong>工具</strong>。
+<code>filterAndConvert</code> 只负责把 <code>ToolUseBlock</code> 转成 provider 格式，
+工具本身的注册、schema、执行、结果回收是另一个子系统。
+下一章 Q07 拆 <code>packages/core/src/tools/</code> 与 <code>tool-executor/</code>：
+一个工具从注册到执行完毕要过几道关卡，MCP 工具又如何接进同一套。</p>
+<hr>
+<blockquote>
+<p><strong>本章读完你应该能回答</strong>：
+① 为什么内部消息格式不能直接等于 provider 格式？
+——会话要落盘、跨版本读回，而 provider 契约会变。
+② <code>normalizeMessagesForAPI</code> 有几道工序？顺序能换吗？
+——七道；<code>mergeAssistantFragments</code> 必须在转换前，<code>mergeUserMessages</code> 必须在转换后。
+③ 压缩后的历史为什么要分区归一化？
+——否则附件折叠会把 prefix 通知塞进 body 的工具结果。
+④ 工具 ID 重写为什么要保持确定性？
+——重写结果只依赖历史前缀，才能让 prompt 缓存命中。
+⑤ <code>isVirtual</code> 的消息为什么不能进请求？
+——它是运行时包装，模型不该看见自己没说过的话。</p>
+</blockquote>
+
+<div class="pager">
+      <a class="prev" href="q05-request-prep.html"><span class="lbl">上一篇</span>一次请求的七步装配 —— 1,132 行里发生了什么</a>
+      <a class="next" href="q07-tools-mcp.html"><span class="lbl">下一篇</span>工具与 MCP —— 45 个内置工具如何接进同一张表</a>
+    </div>
+</main>
+<nav class="toc"><div class="toc-title">本章目录</div><a href="#sec-1-一-七种消息" class="">一、七种消息</a><a href="#sec-2-二-内容块只有四种" class="">二、内容块只有四种</a><a href="#sec-3-三-五个-is-标志" class="">三、五个 is 标志</a><a href="#sec-4-四-七道工序" class="">四、七道工序</a><a href="#sec-5-五-压缩前缀为什么要分区" class="">五、压缩前缀为什么要分区</a><a href="#sec-6-六-工具-id-重写-为什么必须保持稳定" class="">六、工具 ID 重写：为什么必须保持稳定</a><a href="#sec-7-七-工程暗坑" class="">七、工程暗坑</a><a href="#sec-8-八-本章源码索引" class="">八、本章源码索引</a><a href="#sec-9-九-自己动手验证" class="">九、自己动手验证</a><a href="#sec-10-十-下一步" class="">十、下一步</a></nav>
+</div>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var key = "qw-book-theme";
+  var saved = localStorage.getItem(key);
+  if (saved) root.setAttribute("data-theme", saved);
+  var btn = document.getElementById("theme-toggle");
+  function label() {
+    btn.textContent = root.getAttribute("data-theme") === "dark" ? "浅色" : "深色";
+  }
+  label();
+  btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem(key, next);
+    label();
+  });
+
+  var rail = document.getElementById("progress-rail");
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    rail.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+  if (links.length) {
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+    function mark() {
+      var best = -1;
+      targets.forEach(function (t, i) {
+        if (t && t.getBoundingClientRect().top <= 120) best = i;
+      });
+      links.forEach(function (a, i) { a.classList.toggle("active", i === best); });
+    }
+    document.addEventListener("scroll", mark, { passive: true });
+    mark();
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(
+        function () { return true; },
+        function () { return legacyCopy(text); }
+      );
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function legacyCopy(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  // 代码块复制：双击 HTML 打开时没有 secure context，所以留了 execCommand 退路
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest(".copy");
+    if (!button) return;
+    var lines = button.closest(".code-block").querySelectorAll(".ln");
+    var text = Array.prototype.map.call(lines, function (line) {
+      return line.textContent;
+    }).join("\n"); // 在模板字符串里必须写成 \n，否则产物中字符串字面量跨行、整块脚本语法错误
+    copyText(text).then(function (ok) {
+      button.textContent = ok ? "已复制" : "复制失败";
+      button.classList.toggle("is-done", ok);
+      setTimeout(function () {
+        button.textContent = "复制";
+        button.classList.remove("is-done");
+      }, 1200);
+    });
+  });
+})();
+</script>
+</body>
+</html>

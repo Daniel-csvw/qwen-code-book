@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>实战四：写一个 MCP 服务器 · Qwen Code 源码级教程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body class="is-module">
+<div class="progress-rail" id="progress-rail"></div>
+<header class="topbar">
+  <a class="brand" href="../index.html">Qwen <b>Code</b> 源码级教程</a>
+  <span class="spacer"></span>
+  <button id="theme-toggle" type="button">深色</button>
+</header>
+<div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
+                <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
+                <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
+                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
+                <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
+                <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
+                <span class="code">Q07</span><span>工具与 MCP —— 45 个内置工具如何接进同一张表</span></a><a href="q08-permission-hooks.html" class="">
+                <span class="code">Q08</span><span>权限与钩子 —— 两道闸门如何拦住一次工具调用</span></a></div><div class="part"><div class="part-title">Part C · 上下文与资产</div><a href="q09-context-engineering.html" class="">
+                <span class="code">Q09</span><span>上下文工程 —— 三层记忆与并发飞行</span></a><a href="q10-compaction.html" class="">
+                <span class="code">Q10</span><span>记忆压缩 —— 14 种失败原因与一道熔断</span></a><a href="q11-skills-plugins.html" class="">
+                <span class="code">Q11</span><span>技能与插件 —— 能执行 shell 的提示词</span></a><a href="q12-agents-workflow.html" class="">
+                <span class="code">Q12</span><span>Agent 与 Workflow —— 六种终止模式与四个内置代理</span></a></div><div class="part"><div class="part-title">Part D · 使用侧</div><a href="q13-frameworks.html" class="">
+                <span class="code">Q13</span><span>ACP 与 headless —— 内核怎么接进编辑器与脚本</span></a><a href="q14-ink-tui.html" class="">
+                <span class="code">Q14</span><span>TUI 与 ink —— 为什么要把渲染库 fork 进来</span></a></div><div class="part"><div class="part-title">Part E · 实战拓展</div><a href="q15-custom-tool.html" class="">
+                <span class="code">Q15</span><span>实战一：写一个自定义工具</span></a><a href="q16-hooks.html" class="">
+                <span class="code">Q16</span><span>实战二：写一个钩子——三道拦截</span></a><a href="q17-skills.html" class="">
+                <span class="code">Q17</span><span>实战三：写一个技能——发版一条龙</span></a><a href="q18-mcp.html" class="active">
+                <span class="code">Q18</span><span>实战四：写一个 MCP 服务器</span></a><a href="q19-headless.html" class="">
+                <span class="code">Q19</span><span>实战五：headless 流水线</span></a></div><div class="part"><div class="part-title">附录</div><a href="q21-appendix-a.html" class="">
+                <span class="code">附录 A</span><span>附录 A · 按问题查</span></a><a href="q20-appendix-b.html" class="">
+                <span class="code">附录 B</span><span>附录 B · 源码坐标总表</span></a></div></aside>
+<div class="main">
+<main class="prose">
+<header class="module-header">
+      <div class="module-eyebrow">Q18</div>
+      <h1>实战四：写一个 MCP 服务器</h1>
+      <div class="module-meta">2,203 字 · 126 行代码 · 13 块 · 约 17 分钟</div>
+    </header>
+    <p>Q07 讲过一个论断：<strong>MCP 工具和内置工具在注册表里是平级的</strong>，
+区别只在名字带 <code>mcp__</code> 前缀。本章写一个真的服务器，
+把这句话验证到底。</p>
+<h2 id="sec-1-一-服务器要满足的契约">一、服务器要满足的契约</h2>
+<p>MCP 是 JSON-RPC 协议。服务器不用管传输，只需回答三个问题：
+<strong>你叫什么、你有哪些工具、调用这个工具会怎样</strong>。</p>
+<p>在 Qwen Code 这一侧，工具的描述用 <code>MCPServerConfig</code> 配置
+（<code>packages/core/src/mcp/mcpServerConfig.ts:40-87</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">class</span> MCPServerConfig {</span><span class="ln">  <span class="tok-fn">constructor</span>(</span><span class="ln">    <span class="tok-com">// For stdio transport</span></span><span class="ln">    <span class="tok-kw">readonly</span> command?: <span class="tok-kw">string</span>,</span><span class="ln">    <span class="tok-kw">readonly</span> args?: <span class="tok-kw">string</span>[],</span><span class="ln">    <span class="tok-kw">readonly</span> env?: Record&lt;<span class="tok-kw">string</span>, <span class="tok-kw">string</span>&gt;,</span><span class="ln">    <span class="tok-kw">readonly</span> cwd?: <span class="tok-kw">string</span>,</span><span class="ln">    <span class="tok-com">// For sse transport</span></span><span class="ln">    <span class="tok-kw">readonly</span> url?: <span class="tok-kw">string</span>,</span><span class="ln">    <span class="tok-com">// For streamable http transport</span></span><span class="ln">    <span class="tok-kw">readonly</span> httpUrl?: <span class="tok-kw">string</span>,</span><span class="ln">    <span class="tok-kw">readonly</span> headers?: Record&lt;<span class="tok-kw">string</span>, <span class="tok-kw">string</span>&gt;,</span><span class="ln">    <span class="tok-com">// For websocket transport</span></span><span class="ln">    <span class="tok-kw">readonly</span> tcp?: <span class="tok-kw">string</span>,</span><span class="ln">    <span class="tok-kw">readonly</span> <span class="tok-kw">type</span>?: <span class="tok-str">'sse'</span> | <span class="tok-str">'http'</span> | <span class="tok-str">'ws'</span> | <span class="tok-str">'sdk'</span>,</span><span class="ln">    <span class="tok-kw">readonly</span> timeout?: <span class="tok-kw">number</span>,</span><span class="ln">    <span class="tok-kw">readonly</span> trust?: <span class="tok-kw">boolean</span>,</span><span class="ln">    <span class="tok-kw">readonly</span> includeTools?: <span class="tok-kw">string</span>[],</span><span class="ln">    <span class="tok-kw">readonly</span> excludeTools?: <span class="tok-kw">string</span>[],</span><span class="ln">    ...</span><span class="ln">  ) {}</span><span class="ln">}</span></code></pre></div>
+<p>四种传输：<code>stdio</code>（默认，走 <code>command</code>）、<code>sse</code>、<code>http</code>、<code>ws</code>，
+外加一个特殊的 <code>sdk</code>——进程内桥接，不启子进程。</p>
+<p><code>includeTools</code> 与 <code>excludeTools</code> 是<strong>白名单与黑名单</strong>，
+两个都写时的优先级在源码注释里写死了（<code>mcp-tool.ts:1325</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">// excludeTools takes precedence over includeTools</span></span><span class="ln"><span class="tok-kw">if</span> (excludeTools &amp;&amp; excludeTools.<span class="tok-fn">includes</span>(funcDecl.name)) {</span><span class="ln">  <span class="tok-kw">return</span> <span class="tok-kw">false</span>;</span><span class="ln">}</span></code></pre></div>
+<p><strong>黑名单优先</strong>。先排除，再看白名单。
+这个顺序符合安全直觉：拉黑是不可撤销的，白名单再多也捞不回来。</p>
+<p>白名单还有个隐藏语法（<code>:1332-1333</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">includeTools.<span class="tok-fn">some</span>(</span><span class="ln">  (tool) =&gt; tool === funcDecl.name || tool.<span class="tok-fn">startsWith</span>(<span class="tok-str">`${funcDecl.name}(`</span>),</span><span class="ln">)</span></code></pre></div>
+<p>注意括号是<strong>拼在名字之后</strong>的，所以 <code>includeTools</code> 里写 <code>&quot;search&quot;</code>
+只匹配名字恰为 <code>search</code> 或 <code>search(</code> 开头的工具，匹配不到 <code>searchAll</code>。
+它不是 glob——想做批量筛选，在配置生成阶段把名单展开成完整列表。</p>
+<p>工具的返回形状也是契约的一部分。仓库里的测试服务器把它写成了类型
+（<code>packages/core/src/test-utils/test-mcp-server.ts:11-25</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">interface</span> TestToolResponse {</span><span class="ln">  content: { <span class="tok-kw">type</span>: <span class="tok-str">'text'</span>; text: <span class="tok-kw">string</span> }[];</span><span class="ln">  isError?: <span class="tok-kw">boolean</span>;</span><span class="ln">}</span><span class="ln"></span><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">interface</span> TestTool {</span><span class="ln">  name: <span class="tok-kw">string</span>;</span><span class="ln">  description: <span class="tok-kw">string</span>;</span><span class="ln">  <span class="tok-com">/** JSON Schema for input arguments */</span></span><span class="ln">  inputSchema?: Record&lt;<span class="tok-kw">string</span>, <span class="tok-kw">unknown</span>&gt;;</span><span class="ln">  response: TestToolResponse;</span><span class="ln">}</span></code></pre></div>
+<p><code>content</code> 是个数组，元素带 <code>type</code>。<code>text</code> 只是其中一种——
+还可以是 <code>image</code>、<code>resource</code>。这个「内容块数组」结构
+和 Q06 的消息协议是同构的，不是巧合：MCP 与 Anthropic 的消息格式本就同源。</p>
+<p><code>isError</code> 是<strong>结果级</strong>的错误标记，不是协议级。
+协议级的错误走 JSON-RPC 的 <code>error</code> 字段；
+<code>isError: true</code> 表示「调用成功了，但业务上失败了」。
+两者的区别在下一章 Q19 会变得关键。</p>
+<h2 id="sec-2-二-工具名叫什么-mcp__server__tool">二、工具名叫什么：<code>mcp__server__tool</code></h2>
+<p>MCP 工具进入注册表时要改名，因为模型看到的名字必须是全局唯一的。
+规则就写在 <code>mcp-names.ts</code> 的头部（<code>:8-9</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">/**</span></span><span class="ln"><span class="tok-com"> * MCP qualified-name primitives: `mcp__{server}__{tool}`.</span></span><span class="ln"><span class="tok-com"> * ...</span></span><span class="ln"><span class="tok-com"> */</span></span></code></pre></div>
+<p>前缀 <code>mcp__</code>，分隔符 <code>__</code>。所以服务器叫 <code>weather</code>、工具叫 <code>get_forecast</code>，
+模型看到的是 <code>mcp__weather__get_forecast</code>。</p>
+<p>但服务器名和工具名是<strong>用户随手起的</strong>，可能带空格、中文、emoji。
+<code>normalizeMcpSegment</code>（<code>:37-47</code>）负责把它们压成合法段：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">function</span> <span class="tok-fn">normalizeMcpSegment</span>(segment: <span class="tok-kw">string</span>): <span class="tok-kw">string</span> {</span><span class="ln">  <span class="tok-kw">const</span> slug = segment</span><span class="ln">    .<span class="tok-fn">replace</span>(/[^a-zA-Z0-<span class="tok-num">9_</span>-]/g, <span class="tok-str">'_'</span>)</span><span class="ln">    .<span class="tok-fn">replace</span>(/_+/g, <span class="tok-str">'_'</span>)</span><span class="ln">    .<span class="tok-fn">replace</span>(/^_|_$/g, <span class="tok-str">''</span>);</span><span class="ln">  <span class="tok-kw">if</span> (!/[^\p{ASCII}]/u.<span class="tok-fn">test</span>(segment)) <span class="tok-kw">return</span> slug;</span><span class="ln"></span><span class="ln">  <span class="tok-com">// A pure mapping keeps IDs stable across discovery order and reconnects.</span></span><span class="ln">  <span class="tok-kw">const</span> hash = <span class="tok-fn">createHash</span>(<span class="tok-str">'sha256'</span>).<span class="tok-fn">update</span>(segment).<span class="tok-fn">digest</span>(<span class="tok-str">'hex'</span>).<span class="tok-fn">slice</span>(<span class="tok-num">0</span>, <span class="tok-num">12</span>);</span><span class="ln">  <span class="tok-kw">return</span> <span class="tok-str">`${slug || 'u'}_${hash}`</span>;</span><span class="ln">}</span></code></pre></div>
+<p>三步清洗：非法字符换 <code>_</code>、连续 <code>_</code> 压成一个、首尾 <code>_</code> 去掉。
+<strong>为什么最后一步重要</strong>：段与段之间用 <code>__</code> 拼。如果某段以 <code>_</code> 结尾，
+拼接后就多出一个 <code>_</code>，<code>mcp__a___b</code> 这种名字拆不回来。
+所以清洗必须保证段本身<strong>不带首尾下划线</strong>——这是为了保证分隔符可解析。</p>
+<p>对非 ASCII 名还有一步：追加原名的 sha256 前 12 位。
+注释解释了原因——「不同的中文名会被压成同一个（可能为空的）slug」。
+<code>发布工具</code> 和 <code>发布工具2</code> 清洗后都是空串，没有哈希就撞名了。
+哈希是<strong>纯映射</strong>，与发现顺序无关，重连也不会变——
+否则每次重连工具名都变，prompt 缓存全废（Q06 讲过这件事）。</p>
+<h2 id="sec-3-三-三补丁-让别人的-schema-能过本站的关">三、三补丁：让别人的 schema 能过本站的关</h2>
+<p>MCP 服务器是别人写的，schema 什么样都有。
+而 Qwen Code 上游 API 对 <code>properties</code> 的键名有个硬约束
+（<code>mcp-schema-sanitizer.ts:26</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">const</span> MCP_PROPERTY_KEY_PATTERN = /^[a-zA-Z0-<span class="tok-num">9_.</span>-]{<span class="tok-num">1</span>,<span class="tok-num">64</span>}$/;</span></code></pre></div>
+<p>只允许字母、数字、下划线、点、横线，最长 64。
+有服务器会吐 <code>8:BizyAir_NanoBanana2.aspect_ratio</code> 这种带冒号的键
+（注释里点名了 ComfyUI 系的桥接服务器），整个 schema 会被拒。</p>
+<p>于是有了三个补丁：</p>
+<p><strong>补丁 1：键名重写</strong>（<code>:53-61</code>）。逐字符过滤，非法字符换 <code>_</code>，超长截断。
+同时记一张 <code>sanitized → original</code> 的反向表。</p>
+<p><strong>补丁 2：幽灵 required 剪除</strong>（<code>:74-96</code>）。有些服务器的 <code>required</code> 里列了
+<code>//TODO: Add Field Name 0</code> 这种占位名，但 <code>properties</code> 里根本没有。
+严格的上游会拒绝整个 schema（<code>required property ... is not defined</code>），
+于是<strong>这一轮会话所有请求全挂</strong>——一个工具的问题拖垮全局。
+所以防御性地剪掉，并打一条 warn 记录剪了什么。</p>
+<p><strong>补丁 3：只改顶层</strong>（<code>:98-106</code> 注释）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">/**</span></span><span class="ln"><span class="tok-com"> * Only rewrites `properties` keys (and mirrors the same rewrites into the</span></span><span class="ln"><span class="tok-com"> * `required` array). Nested `properties` inside array `items` / object</span></span><span class="ln"><span class="tok-com"> * children are intentionally left alone — in practice the constraint is</span></span><span class="ln"><span class="tok-com"> * enforced at the top level, and leaving nested structures untouched keeps</span></span><span class="ln"><span class="tok-com"> * the reverse-map (and therefore the MCP call path) simple and correct.</span></span><span class="ln"><span class="tok-com"> */</span></span></code></pre></div>
+<p>不改嵌套结构，是为了让<strong>反向映射保持简单正确</strong>。
+嵌套深了，反向映射要建树，&quot;哪一层的这个键&quot;就得带路径，
+一处出错整个调用参数就错位。这是一个典型的「宁可少做，也要做对」。</p>
+<p>补丁 1 埋下的表必须<strong>有回路</strong>。<code>mcp-tool.ts</code> 里，
+<code>callTool</code> 派发前会调 <code>restoreOriginalArgKeys</code>（<code>:1271</code>）把模型给的
+清洗后键名换回原名。少了这一步，服务器收到的就是 <code>_</code> 拼出来的假名字。</p>
+<h2 id="sec-4-四-超时-三层-默认值很反直觉">四、超时：三层，默认值很反直觉</h2>
+<p>MCP 调用有三层时间限制（<code>mcp-timeouts.ts:13-31</code>）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>层</th>
+<th>常量</th>
+<th>默认值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>连接/发现</td>
+<td><code>MCP_CONNECT_TIMEOUT_MSEC</code></td>
+<td>30,000 ms</td>
+</tr>
+<tr>
+<td>空闲</td>
+<td><code>MCP_STDIO_TOOL_IDLE_TIMEOUT_DEFAULT_MSEC</code></td>
+<td>1,800,000 ms（30 分）</td>
+</tr>
+<tr>
+<td>硬墙钟</td>
+<td><code>MCP_TOOL_HARD_TIMEOUT_DEFAULT_MSEC</code></td>
+<td>100,000,000 ms</td>
+</tr>
+</tbody>
+</table></div>
+<p>第三层值得停一下：一亿毫秒约等于 <strong>27.8 小时</strong>。
+不是笔误，也不是打错了零——它的语义是「<strong>等于不设</strong>」。
+真正的兜底交给「空闲超时」：只要工具还在吐数据，就不算超时；
+一旦 30 分钟没有任何输出，认定为卡死。</p>
+<p>这个选择对 MCP 特别合理。MCP 工具可能是训练模型、跑编译、下载大文件，
+时长本身无法预估；判断「还活着吗」比判断「该不该结束」容易得多。</p>
+<p>还有一条注释值得注意（<code>:16-19</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">/**</span></span><span class="ln"><span class="tok-com"> * Connect/discovery request timeout. Per-server `timeout` is intentionally</span></span><span class="ln"><span class="tok-com"> * reserved for tool calls and never overrides this value.</span></span><span class="ln"><span class="tok-com"> */</span></span></code></pre></div>
+<p>配置里的 <code>timeout</code> 字段<strong>只作用于工具调用，不改连接超时</strong>。
+想调连接超时没有配置项——这是有意的：连接阶段的慢通常意味着配置写错，
+让它快点失败比让它慢慢等更好。</p>
+<h2 id="sec-5-五-一个最小的服务器骨架">五、一个最小的服务器骨架</h2>
+<p>协议细节交给 SDK，你只需要实现一个 <code>tools/list</code> 与一个 <code>tools/call</code>。
+最小的 stdio 服务器大概长这样：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">import</span> { Server } <span class="tok-kw">from</span> <span class="tok-str">'@modelcontextprotocol/sdk/server/index.js'</span>;</span><span class="ln"><span class="tok-kw">import</span> {</span><span class="ln">  StdioServerTransport,</span><span class="ln">} <span class="tok-kw">from</span> <span class="tok-str">'@modelcontextprotocol/sdk/server/stdio.js'</span>;</span><span class="ln"><span class="tok-kw">import</span> {</span><span class="ln">  CallToolRequestSchema,</span><span class="ln">  ListToolsRequestSchema,</span><span class="ln">} <span class="tok-kw">from</span> <span class="tok-str">'@modelcontextprotocol/sdk/types.js'</span>;</span><span class="ln"></span><span class="ln"><span class="tok-kw">const</span> server = <span class="tok-kw">new</span> <span class="tok-fn">Server</span>(</span><span class="ln">  { name: <span class="tok-str">'repo-tools'</span>, version: <span class="tok-str">'0.1.0'</span> },</span><span class="ln">  { capabilities: { tools: {} } },</span><span class="ln">);</span><span class="ln"></span><span class="ln">server.<span class="tok-fn">setRequestHandler</span>(ListToolsRequestSchema, <span class="tok-kw">async</span> () =&gt; ({</span><span class="ln">  tools: [</span><span class="ln">    {</span><span class="ln">      name: <span class="tok-str">'count_todos'</span>,</span><span class="ln">      description: <span class="tok-str">'Count TODO comments in the repo'</span>,</span><span class="ln">      inputSchema: {</span><span class="ln">        <span class="tok-kw">type</span>: <span class="tok-str">'object'</span>,</span><span class="ln">        properties: { dir: { <span class="tok-kw">type</span>: <span class="tok-str">'string'</span> } },</span><span class="ln">        required: [<span class="tok-str">'dir'</span>],</span><span class="ln">      },</span><span class="ln">    },</span><span class="ln">  ],</span><span class="ln">}));</span><span class="ln"></span><span class="ln">server.<span class="tok-fn">setRequestHandler</span>(CallToolRequestSchema, <span class="tok-kw">async</span> (req) =&gt; {</span><span class="ln">  <span class="tok-kw">if</span> (req.params.name !== <span class="tok-str">'count_todos'</span>) {</span><span class="ln">    <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-fn">Error</span>(<span class="tok-str">`unknown tool: ${req.params.name}`</span>);</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">const</span> dir = <span class="tok-fn">String</span>(req.params.arguments?.dir ?? <span class="tok-str">'.'</span>);</span><span class="ln">  <span class="tok-kw">const</span> n = <span class="tok-fn">countTodos</span>(dir);</span><span class="ln">  <span class="tok-kw">return</span> { content: [{ <span class="tok-kw">type</span>: <span class="tok-str">'text'</span>, text: <span class="tok-str">`found ${n} TODO`</span> }] };</span><span class="ln">});</span><span class="ln"></span><span class="ln"><span class="tok-kw">await</span> server.<span class="tok-fn">connect</span>(<span class="tok-kw">new</span> <span class="tok-fn">StdioServerTransport</span>());</span></code></pre></div>
+<p>三个要点：</p>
+<ol>
+<li><strong><code>inputSchema</code> 必须合法 JSON Schema</strong>。它会进 <code>tools/list</code>，
+然后被上一节的三补丁处理一遍。所以就算你写了奇怪键名也能用，
+但别指望嵌套结构也被救。</li>
+<li><strong>未知工具要抛错</strong>，不要返回 <code>isError: true</code>。
+协议级错误和结果级错误的区别就在这里——服务器不认这个名字，
+这是协议错误，不是业务失败。</li>
+<li><strong><code>content</code> 是数组</strong>，不是字符串。想返回图片就加
+<code>{ type: 'image', data: base64, mimeType: 'image/png' }</code>。</li>
+</ol>
+<p>然后写进配置：</p>
+<div class="code-block" data-lang="json">
+<div class="code-head"><span class="lang">json</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">{</span><span class="ln">  <span class="tok-str">"mcpServers"</span>: {</span><span class="ln">    <span class="tok-str">"repo-tools"</span>: {</span><span class="ln">      <span class="tok-str">"command"</span>: <span class="tok-str">"node"</span>,</span><span class="ln">      <span class="tok-str">"args"</span>: [<span class="tok-str">".mcp/repo-tools.js"</span>],</span><span class="ln">      <span class="tok-str">"trust"</span>: <span class="tok-kw">true</span></span><span class="ln">    }</span><span class="ln">  }</span><span class="ln">}</span></code></pre></div>
+<p>模型看到的名字是 <code>mcp__repo-tools__count_todos</code>。</p>
+<h2 id="sec-6-六-工程暗坑">六、工程暗坑</h2>
+<p><strong>1. <code>trust</code> 决定要不要问</strong>
+<code>trust: true</code> 表示这个服务器的工具默认放行。
+不写它，每次调用都要过 Q08 那套权限判定。
+对你自己写的、只读的服务器可以开；对外部服务器不要图省事。</p>
+<p><strong>2. 服务器启动失败是静默的</strong>
+连接失败不会让对话失败，只是<strong>这个服务器的工具都不出现</strong>。
+所以「模型说没有这个工具」时，第一步是看 MCP 的连接状态，
+而不是怀疑模型。仓库里有个 <code>mcp-status.ts</code> 协议专门传这个状态。</p>
+<p><strong>3. <code>sdk</code> 类型不是真服务器</strong>
+<code>type: 'sdk'</code> 的服务器跑在 SDK 进程内，每次 JSON-RPC 都通过控制协议
+回传到 SDK（<code>mcpServerConfig.ts:104-110</code> 的注释）。
+它不走 stdio，也不 listen 端口——排障时不要去找进程。</p>
+<p><strong>4. <code>scope</code> 有五种，治理规则不同</strong>
+<code>user</code> / <code>local</code> / <code>project</code> / <code>flag</code> 是磁盘来源，受信任门控；
+<code>dynamic</code> 是运行时注入（ACP 会话或控制命令），<strong>豁免信任门控</strong>，
+只剩企业白名单。所以「为什么这个服务器的工具没经过我批准」，
+先看它是不是 <code>dynamic</code>（<code>mcpServerConfig.ts:24-33</code>）。</p>
+<p><strong>5. 中文服务器名会导致工具名变长</strong>
+<code>发布工具</code> 清洗成空 slug 加 12 位哈希（<code>u</code> 是空 slug 的兜底）。
+这个名字会进模型上下文，既看不懂又不稳定（换名字哈希就变）。
+所以自己的服务器<strong>用英文起名</strong>。</p>
+<p><strong>6. <code>isError</code> 同时接受布尔和字符串</strong>
+<code>mcp-tool.ts:835</code>：<code>response.isError === true || response.isError === 'true'</code>。
+有些服务器（尤其是 Python 写的）会把布尔序列化成字符串。
+这个兼容层说明：<strong>不要相信 MCP 服务器的类型声明</strong>。</p>
+<h2 id="sec-7-七-本章源码索引">七、本章源码索引</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>行数</th>
+<th>本章用到的位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packages/core/src/mcp/mcpServerConfig.ts</code></td>
+<td>140</td>
+<td><code>:24-33</code> 五种 scope</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:40-87</code> 配置构造参数</td>
+</tr>
+<tr>
+<td><code>packages/core/src/mcp/tools/mcp-names.ts</code></td>
+<td>90</td>
+<td><code>:8-9</code> 命名规则</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:37-47</code> 段清洗与哈希</td>
+</tr>
+<tr>
+<td><code>packages/core/src/mcp/mcp-schema-sanitizer.ts</code></td>
+<td>260</td>
+<td><code>:26</code> 键名正则</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:74-96</code> 幽灵 required</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:98-106</code> 只改顶层</td>
+</tr>
+<tr>
+<td><code>packages/core/src/mcp/tools/mcp-tool.ts</code></td>
+<td>1,336</td>
+<td><code>:835</code> isError 宽松判定</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:1271</code> 参数反向还原</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:1325-1335</code> 黑白名单优先级</td>
+</tr>
+<tr>
+<td><code>packages/core/src/mcp/tools/mcp-timeouts.ts</code></td>
+<td>183</td>
+<td><code>:13-31</code> 三层超时</td>
+</tr>
+<tr>
+<td><code>packages/core/src/mcp/client/mcpClient.ts</code></td>
+<td>914</td>
+<td>连接与握手</td>
+</tr>
+<tr>
+<td><code>packages/core/src/test-utils/test-mcp-server.ts</code></td>
+<td>76</td>
+<td><code>:11-25</code> 返回契约</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="sec-8-八-自己动手验证">八、自己动手验证</h2>
+<div class="code-block" data-lang="bash">
+<div class="code-head"><span class="lang">bash</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">node qw-examples/check/18-mcp.mjs</span></code></pre></div>
+<p>预期输出：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">transports: 4 -&gt; sse / http / ws / sdk</span><span class="ln">server scopes: 5 -&gt; user / local / project / flag / dynamic</span><span class="ln">tool name prefix: mcp__</span><span class="ln">separator: __</span><span class="ln">non-ascii hash length: 12</span><span class="ln">property key pattern: ^[a-zA-Z0-9_.-]{1,64}$</span><span class="ln">has pruneGhostRequired: true</span><span class="ln">request timeout: 30000 ms</span><span class="ln">hard timeout: 100000000 ms (~28h)</span><span class="ln">idle timeout stdio/remote: 1800000 / 300000 ms</span></code></pre></div>
+<p>改一处试试：把 <code>mcp-timeouts.ts:14</code> 的硬超时改成一个真实值，比如 60,000。
+然后接一个故意不返回数据的服务器，调用它的工具。
+你会看到报错从「等 27 小时」变成「一分钟超时」——
+但真正先触发的是 30 分钟的空闲超时（如果你没把那个也改小）。
+两层超时的关系就这样被验证出来了。</p>
+<h2 id="sec-9-九-下一步">九、下一步</h2>
+<p>工具、钩子、技能、MCP 服务器都写完了。四个动手项目覆盖了拓展的四种形态：
+进程内工具、事件钩子、提示词资产、外部进程。</p>
+<p>下一章 Q19 是最后一章：把这一切放进 <strong>headless 模式</strong>，
+做成一条 CI 里能跑的流水线——这才是「拓展」真正落地的地方。</p>
+<hr>
+<blockquote>
+<p><strong>本章读完你应该能回答</strong>：
+① MCP 工具的模型侧名字长什么样？
+——<code>mcp__server__tool</code>，三段式。
+② <code>includeTools</code> 与 <code>excludeTools</code> 谁优先？
+——<code>excludeTools</code>，先排除再看白名单。
+③ schema 三补丁分别解决什么？
+——键名非法、幽灵 required、嵌套结构不敢动。
+④ 硬超时默认一亿毫秒是什么意思？
+——等于不设，真正的兜底是 30 分钟空闲超时。
+⑤ 服务器连不上会怎样？
+——静默失败，只是它的工具不出现，对话继续。</p>
+</blockquote>
+
+<div class="pager">
+      <a class="prev" href="q17-skills.html"><span class="lbl">上一篇</span>实战三：写一个技能——发版一条龙</a>
+      <a class="next" href="q19-headless.html"><span class="lbl">下一篇</span>实战五：headless 流水线</a>
+    </div>
+</main>
+<nav class="toc"><div class="toc-title">本章目录</div><a href="#sec-1-一-服务器要满足的契约" class="">一、服务器要满足的契约</a><a href="#sec-2-二-工具名叫什么-mcp__server__tool" class="">二、工具名叫什么：mcp__server__tool</a><a href="#sec-3-三-三补丁-让别人的-schema-能过本站的关" class="">三、三补丁：让别人的 schema 能过本站的关</a><a href="#sec-4-四-超时-三层-默认值很反直觉" class="">四、超时：三层，默认值很反直觉</a><a href="#sec-5-五-一个最小的服务器骨架" class="">五、一个最小的服务器骨架</a><a href="#sec-6-六-工程暗坑" class="">六、工程暗坑</a><a href="#sec-7-七-本章源码索引" class="">七、本章源码索引</a><a href="#sec-8-八-自己动手验证" class="">八、自己动手验证</a><a href="#sec-9-九-下一步" class="">九、下一步</a></nav>
+</div>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var key = "qw-book-theme";
+  var saved = localStorage.getItem(key);
+  if (saved) root.setAttribute("data-theme", saved);
+  var btn = document.getElementById("theme-toggle");
+  function label() {
+    btn.textContent = root.getAttribute("data-theme") === "dark" ? "浅色" : "深色";
+  }
+  label();
+  btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem(key, next);
+    label();
+  });
+
+  var rail = document.getElementById("progress-rail");
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    rail.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+  if (links.length) {
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+    function mark() {
+      var best = -1;
+      targets.forEach(function (t, i) {
+        if (t && t.getBoundingClientRect().top <= 120) best = i;
+      });
+      links.forEach(function (a, i) { a.classList.toggle("active", i === best); });
+    }
+    document.addEventListener("scroll", mark, { passive: true });
+    mark();
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(
+        function () { return true; },
+        function () { return legacyCopy(text); }
+      );
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function legacyCopy(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  // 代码块复制：双击 HTML 打开时没有 secure context，所以留了 execCommand 退路
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest(".copy");
+    if (!button) return;
+    var lines = button.closest(".code-block").querySelectorAll(".ln");
+    var text = Array.prototype.map.call(lines, function (line) {
+      return line.textContent;
+    }).join("\n"); // 在模板字符串里必须写成 \n，否则产物中字符串字面量跨行、整块脚本语法错误
+    copyText(text).then(function (ok) {
+      button.textContent = ok ? "已复制" : "复制失败";
+      button.classList.toggle("is-done", ok);
+      setTimeout(function () {
+        button.textContent = "复制";
+        button.classList.remove("is-done");
+      }, 1200);
+    });
+  });
+})();
+</script>
+</body>
+</html>

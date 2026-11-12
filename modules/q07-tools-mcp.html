@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工具与 MCP —— 45 个内置工具如何接进同一张表 · Qwen Code 源码级教程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body class="is-module">
+<div class="progress-rail" id="progress-rail"></div>
+<header class="topbar">
+  <a class="brand" href="../index.html">Qwen <b>Code</b> 源码级教程</a>
+  <span class="spacer"></span>
+  <button id="theme-toggle" type="button">深色</button>
+</header>
+<div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
+                <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
+                <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
+                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
+                <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
+                <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="active">
+                <span class="code">Q07</span><span>工具与 MCP —— 45 个内置工具如何接进同一张表</span></a><a href="q08-permission-hooks.html" class="">
+                <span class="code">Q08</span><span>权限与钩子 —— 两道闸门如何拦住一次工具调用</span></a></div><div class="part"><div class="part-title">Part C · 上下文与资产</div><a href="q09-context-engineering.html" class="">
+                <span class="code">Q09</span><span>上下文工程 —— 三层记忆与并发飞行</span></a><a href="q10-compaction.html" class="">
+                <span class="code">Q10</span><span>记忆压缩 —— 14 种失败原因与一道熔断</span></a><a href="q11-skills-plugins.html" class="">
+                <span class="code">Q11</span><span>技能与插件 —— 能执行 shell 的提示词</span></a><a href="q12-agents-workflow.html" class="">
+                <span class="code">Q12</span><span>Agent 与 Workflow —— 六种终止模式与四个内置代理</span></a></div><div class="part"><div class="part-title">Part D · 使用侧</div><a href="q13-frameworks.html" class="">
+                <span class="code">Q13</span><span>ACP 与 headless —— 内核怎么接进编辑器与脚本</span></a><a href="q14-ink-tui.html" class="">
+                <span class="code">Q14</span><span>TUI 与 ink —— 为什么要把渲染库 fork 进来</span></a></div><div class="part"><div class="part-title">Part E · 实战拓展</div><a href="q15-custom-tool.html" class="">
+                <span class="code">Q15</span><span>实战一：写一个自定义工具</span></a><a href="q16-hooks.html" class="">
+                <span class="code">Q16</span><span>实战二：写一个钩子——三道拦截</span></a><a href="q17-skills.html" class="">
+                <span class="code">Q17</span><span>实战三：写一个技能——发版一条龙</span></a><a href="q18-mcp.html" class="">
+                <span class="code">Q18</span><span>实战四：写一个 MCP 服务器</span></a><a href="q19-headless.html" class="">
+                <span class="code">Q19</span><span>实战五：headless 流水线</span></a></div><div class="part"><div class="part-title">附录</div><a href="q21-appendix-a.html" class="">
+                <span class="code">附录 A</span><span>附录 A · 按问题查</span></a><a href="q20-appendix-b.html" class="">
+                <span class="code">附录 B</span><span>附录 B · 源码坐标总表</span></a></div></aside>
+<div class="main">
+<main class="prose">
+<header class="module-header">
+      <div class="module-eyebrow">Q07</div>
+      <h1>工具与 MCP —— 45 个内置工具如何接进同一张表</h1>
+      <div class="module-meta">1,841 字 · 106 行代码 · 17 块 · 约 15 分钟</div>
+    </header>
+    <p>Q05 讲了 <code>getToolSchemas</code> 从注册表取 schema，但没讲注册表里有什么。
+本章打开它，同时回答另一个问题：<strong>MCP 工具是外部进程提供的，凭什么能跟内置工具混在一张表里？</strong></p>
+<h2 id="sec-1-一-45-个内置工具">一、45 个内置工具</h2>
+<p><code>ALL_BUILTIN_TOOL_NAMES</code>（<code>packages/core/src/tools/tool-names.ts:471-525</code>）是一份常量数组。
+数一下：<strong>45 个</strong>。</p>
+<p>按用途分组：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>组</th>
+<th>工具</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文件读写</td>
+<td><code>Grep</code> <code>Read</code> <code>Edit</code> <code>Write</code> <code>Glob</code> <code>NotebookEdit</code></td>
+</tr>
+<tr>
+<td>命令执行</td>
+<td><code>Shell</code> <code>PowerShell</code> <code>BashInput</code> <code>BashOutput</code> <code>BashResize</code> <code>Monitor</code></td>
+</tr>
+<tr>
+<td>网络</td>
+<td><code>WebSearch</code> <code>ImageSearch</code> <code>WebFetch</code></td>
+</tr>
+<tr>
+<td>生成</td>
+<td><code>ImageGen</code> <code>VideoGen</code> <code>VideoGenRetrieve</code></td>
+</tr>
+<tr>
+<td>任务</td>
+<td><code>TaskCreate</code> <code>TaskGet</code> <code>TaskUpdate</code> <code>TaskList</code> <code>TaskStop</code> <code>CompleteTask</code></td>
+</tr>
+<tr>
+<td>目标</td>
+<td><code>GetGoal</code> <code>CreateGoal</code> <code>UpdateGoal</code></td>
+</tr>
+<tr>
+<td>模式</td>
+<td><code>EnterPlanMode</code> <code>ExitPlanMode</code> <code>EnterWorktree</code> <code>ExitWorktree</code></td>
+</tr>
+<tr>
+<td>调度</td>
+<td><code>CronCreate</code> <code>CronDelete</code> <code>CronList</code> <code>ScheduleWakeup</code></td>
+</tr>
+<tr>
+<td>协作</td>
+<td><code>Agent</code> <code>SendMessage</code> <code>ListAgents</code></td>
+</tr>
+<tr>
+<td>其它</td>
+<td><code>CodeMode</code> <code>CodeModeWait</code> <code>Skill</code> <code>AskUser</code> <code>WriteTodos</code> <code>UpdateTopic</code> <code>Workflow</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>三个细节值得注意：</p>
+<p><strong>1. <code>Agent</code> 是唯一的代理入口。</strong>
+注释（<code>:512-514</code>）明确说：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">// The unified Agent tool (dispatches to explore, plan, general-purpose, etc.</span></span><span class="ln"><span class="tok-com">// via subagent_type). Individual agent names (explore, plan) are NOT</span></span><span class="ln"><span class="tok-com">// standalone tools — they are agent definitions dispatched through the</span></span><span class="ln"><span class="tok-com">// tools — they are agent definitions dispatched through the unified Agent</span></span><span class="ln"><span class="tok-com">// tool's subagent_type parameter.</span></span></code></pre></div>
+<p><code>explore</code>、<code>plan</code> 这些名字不是工具，是 <code>Agent</code> 工具的 <code>subagent_type</code> 参数取值。
+这样一个工具就能覆盖所有类型的子代理，不用为每种代理注册一个工具。</p>
+<p><strong>2. 有些工具用注释解释「为什么必须列在这里」。</strong>
+<code>SendMessage</code> 和 <code>ListAgents</code>（<code>:520-524</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">// Messaging. Listed so `--tools` narrows them like any other built-in: left</span></span><span class="ln"><span class="tok-com">// out, an empty `--tools` still handed a headless run these two and nothing</span></span><span class="ln"><span class="tok-com">// else, and with nothing else to do the model went and messaged sessions.</span></span></code></pre></div>
+<p>这说的是一个 bug：不列进 <code>ALL_BUILTIN_TOOL_NAMES</code> 的工具，<code>--tools</code> 白名单就管不住它。
+曾经 headless 跑 <code>--tools</code> 空列表时，模型手里只剩这两个工具，
+没别的事可做，就去给别的会话发消息了。</p>
+<p><strong>3. <code>TOOL_PRESETS</code> 只有一个值</strong>（<code>:531</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">const</span> TOOL_PRESETS = [<span class="tok-str">'default'</span>] <span class="tok-kw">as</span> <span class="tok-kw">const</span>;</span></code></pre></div>
+<p><code>--tools</code> 只认 <code>default</code>，展开成「全部内置工具」。
+这是个刻意的最小设计——预设多了会产生「预设与显式列表冲突」的判定难题。</p>
+<h2 id="sec-2-二-toolregistry-的四个缓存">二、ToolRegistry 的四个缓存</h2>
+<p><code>ToolRegistry</code>（<code>packages/core/src/tools/tool-registry.ts:144-</code>，1,129 行）
+是整个工具子系统的核心。它的字段里有四个缓存：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>键</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allKnownTools</code></td>
+<td>工具名</td>
+<td>全量工具表（含未激活的）</td>
+</tr>
+<tr>
+<td><code>mcpModelNameIndex</code></td>
+<td>模型侧名</td>
+<td>映射到注册表规范名</td>
+</tr>
+<tr>
+<td><code>schemaCache</code></td>
+<td>模型 ID + 提示包</td>
+<td>声明缓存</td>
+</tr>
+<tr>
+<td><code>convertedSchemaCache</code></td>
+<td>声明数组（WeakMap）</td>
+<td>转换后的 <code>ModelStreamTool</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><code>schemaCache</code> 的注释（<code>:157-160</code>）说明了为什么要按「模型 ID + 提示包」做键：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">// In-process cache for declarations, keyed by modelId + prompt bundle so a</span></span><span class="ln"><span class="tok-com">// live remote-policy change cannot leave Full/Lean tool descriptions stale.</span></span><span class="ln"><span class="tok-com">// Cleared whenever the tool set changes (register/unregister/sort/remove).</span></span></code></pre></div>
+<p>远程策略可以在会话中途改变（比如从 Full 切到 Lean 描述）。
+如果只按模型 ID 缓存，切了策略还是拿到旧的描述。
+所以键里必须带提示包，且工具集变动时要清缓存。</p>
+<p><code>getSchema</code>（<code>:185-203</code>）的 19 行是整章的枢纽：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-fn">getSchema</span>(</span><span class="ln">  modelKey?: <span class="tok-kw">string</span>,</span><span class="ln">  schemaContext?: FileReadRecoverySchemaContext,</span><span class="ln">): ModelStreamTool[] {</span><span class="ln">  <span class="tok-kw">const</span> <span class="tok-kw">override</span> = <span class="tok-kw">this</span>.schemaOptions.schemaOverride;</span><span class="ln">  <span class="tok-kw">if</span> (<span class="tok-kw">override</span>) <span class="tok-kw">return</span> [...<span class="tok-kw">override</span>];</span><span class="ln">  <span class="tok-kw">this</span>.<span class="tok-fn">applyMcpTools</span>();</span><span class="ln">  <span class="tok-kw">const</span> effectiveModel = modelKey ?? <span class="tok-kw">this</span>.config.<span class="tok-fn">getActiveModel</span>() ?? <span class="tok-str">''</span>;</span><span class="ln">  <span class="tok-kw">const</span> declarations = schemaContext</span><span class="ln">    ? <span class="tok-kw">this</span>.<span class="tok-fn">getModelFunctionDeclarations</span>(effectiveModel, schemaContext)</span><span class="ln">    : <span class="tok-kw">this</span>.<span class="tok-fn">getModelFunctionDeclarations</span>(effectiveModel);</span><span class="ln">  <span class="tok-kw">const</span> cached = <span class="tok-kw">this</span>.convertedSchemaCache.<span class="tok-kw">get</span>(declarations);</span><span class="ln">  <span class="tok-kw">if</span> (cached) <span class="tok-kw">return</span> cached;</span><span class="ln">  <span class="tok-kw">const</span> filter = <span class="tok-kw">this</span>.schemaOptions.schemaFilter;</span><span class="ln">  <span class="tok-kw">const</span> schemas = <span class="tok-fn">buildModelStreamTools</span>(declarations);</span><span class="ln">  <span class="tok-kw">const</span> visible = filter ? schemas.<span class="tok-fn">filter</span>(filter) : schemas;</span><span class="ln">  <span class="tok-kw">this</span>.convertedSchemaCache.<span class="tok-kw">set</span>(declarations, visible);</span><span class="ln">  <span class="tok-kw">return</span> visible;</span><span class="ln">}</span></code></pre></div>
+<p>四条路径，优先级从上到下：</p>
+<ol>
+<li><strong><code>schemaOverride</code></strong> —— fork 出的子代理可以固定一套 schema，不受主注册表影响；</li>
+<li><strong><code>applyMcpTools()</code></strong> —— 每次取 schema 前同步 MCP 工具（下一节细讲）；</li>
+<li><strong><code>convertedSchemaCache</code></strong> —— 用声明数组做 WeakMap 键，命中就返回；</li>
+<li><strong><code>schemaFilter</code></strong> —— 最后再过一道过滤（比如子代理只给只读工具）。</li>
+</ol>
+<p>注意第 3 步用 <code>WeakMap</code> 而不是 <code>Map</code>。声明数组是每次新建的，
+用 <code>Map</code> 会永久持有引用，内存泄漏；<code>WeakMap</code> 让 GC 能回收。</p>
+<h2 id="sec-3-三-mcp-工具怎么变成内置工具">三、MCP 工具怎么变成内置工具</h2>
+<h2 id="sec-4-三-mcp-工具怎么变成内置工具">三、MCP 工具怎么变成内置工具</h2>
+<p>关键在 <code>applyMcpTools()</code>（<code>packages/core/src/tools/tool-registry.ts:211-232</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">private</span> <span class="tok-fn">applyMcpTools</span>(): <span class="tok-kw">void</span> {</span><span class="ln">  <span class="tok-kw">const</span> mcp = <span class="tok-kw">this</span>.config.getSessionMcpManager?.();</span><span class="ln">  <span class="tok-kw">const</span> plan = mcp?.<span class="tok-fn">getInjectedMcpTools</span>();</span><span class="ln">  <span class="tok-kw">if</span> (!mcp || !plan) <span class="tok-kw">return</span>;</span><span class="ln">  <span class="tok-kw">this</span>.unsubscribeMcp ??= mcp.<span class="tok-fn">onToolListChange</span>(() =&gt; <span class="tok-kw">this</span>.<span class="tok-fn">applyMcpTools</span>());</span><span class="ln">  <span class="tok-kw">const</span> next = <span class="tok-kw">new</span> Set&lt;<span class="tok-kw">string</span>&gt;();</span><span class="ln">  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> entry <span class="tok-kw">of</span> plan.tools) {</span><span class="ln">    next.<span class="tok-fn">add</span>(entry.qualifiedName);</span><span class="ln">    <span class="tok-kw">if</span> (<span class="tok-kw">this</span>.<span class="tok-fn">getKnownTool</span>(entry.qualifiedName) !== entry.tool) {</span><span class="ln">      <span class="tok-kw">this</span>.<span class="tok-fn">registerTool</span>(entry.tool);</span><span class="ln">    }</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> name <span class="tok-kw">of</span> <span class="tok-kw">this</span>.registeredMcpTools) {</span><span class="ln">    <span class="tok-kw">if</span> (!next.<span class="tok-fn">has</span>(name)) <span class="tok-kw">this</span>.<span class="tok-fn">unregisterTool</span>(name);</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">if</span> (plan.includeMetaTools) {</span><span class="ln">    <span class="tok-kw">this</span>.config.<span class="tok-fn">registerLazyMetaTools</span>(<span class="tok-kw">this</span>);</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">this</span>.<span class="tok-fn">sortTools</span>();</span><span class="ln">  <span class="tok-kw">this</span>.registeredMcpTools.<span class="tok-fn">clear</span>();</span><span class="ln">  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> name <span class="tok-kw">of</span> next) <span class="tok-kw">this</span>.registeredMcpTools.<span class="tok-fn">add</span>(name);</span><span class="ln">}</span></code></pre></div>
+<p>三步：<strong>补新增</strong>、<strong>删消失</strong>、<strong>重排序</strong>。</p>
+<p>这段代码揭示了 MCP 的接入方式：<strong>MCP 工具在注册表里就是普通工具</strong>。
+<code>DiscoveredMCPTool</code>（<code>packages/core/src/mcp/tools/mcp-tool.ts:422</code>）继承自
+<code>BaseDeclarativeTool</code>，跟内置工具同一个基类。</p>
+<p>所以「内置」与「外部」的差别被完全消除——
+<code>getSchema()</code> 只是从 <code>allKnownTools</code> 里取，不关心它是谁注册的。</p>
+<h2 id="sec-5-四-mcp-名字的三段式">四、MCP 名字的三段式</h2>
+<p>MCP 工具全名由 <code>buildMcpToolName</code> 拼出（<code>packages/core/src/mcp/tools/mcp-tool.ts:117-119</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">function</span> <span class="tok-fn">buildMcpToolName</span>(</span><span class="ln">  serverName: <span class="tok-kw">string</span>,</span><span class="ln">  toolName: <span class="tok-kw">string</span>,</span><span class="ln">): <span class="tok-kw">string</span> {</span><span class="ln">  <span class="tok-kw">return</span> (</span><span class="ln">    MCP_TOOL_PREFIX +</span><span class="ln">    <span class="tok-fn">normalizeMcpSegment</span>(serverName) +</span><span class="ln">    MCP_QUALIFIED_NAME_SEPARATOR +</span><span class="ln">    <span class="tok-fn">normalizeMcpSegment</span>(toolName)</span><span class="ln">  );</span><span class="ln">}</span></code></pre></div>
+<p>形如 <code>mcp__server__tool</code>。<code>formatMcpToolName</code>（<code>:97-111</code>）支持通配：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>serverName</th>
+<th>toolName</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>*</code></td>
+<td>省略或 <code>*</code></td>
+<td><code>mcp__*</code></td>
+</tr>
+<tr>
+<td><code>*</code></td>
+<td><code>read</code></td>
+<td><code>mcp__*__read</code></td>
+</tr>
+<tr>
+<td><code>filesystem</code></td>
+<td>省略或 <code>*</code></td>
+<td><code>mcp__filesystem__*</code></td>
+</tr>
+<tr>
+<td><code>filesystem</code></td>
+<td><code>read</code></td>
+<td><code>mcp__filesystem__read</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>通配是为权限规则服务的——一条 <code>mcp__filesystem__*</code> 就能覆盖整台服务器。</p>
+<h2 id="sec-6-五-三个必须打的补丁">五、三个必须打的补丁</h2>
+<p>MCP 是外部生态，schema 质量参差不齐。<code>mcp-schema-sanitizer.ts</code>（260 行）
+专门收拾三种烂数据。</p>
+<p><strong>补丁一：非法属性名。</strong>
+上游 API 对 <code>properties</code> 的键有硬约束（<code>:26</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">const</span> MCP_PROPERTY_KEY_PATTERN = /^[a-zA-Z0-<span class="tok-num">9_.</span>-]{<span class="tok-num">1</span>,<span class="tok-num">64</span>}$/;</span></code></pre></div>
+<p>但有些 MCP 服务器会吐出带冒号的键，比如 ComfyUI 桥接服务器
+产生的 <code>8:BizyAir_NanoBanana2.aspect_ratio</code>。注释（<code>:12-16</code>）说得很清楚：
+API 会直接拒掉整个请求。</p>
+<p><code>sanitizeKey</code>（<code>:53-61</code>）逐字符替换：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">function</span> <span class="tok-fn">sanitizeKey</span>(key: <span class="tok-kw">string</span>): <span class="tok-kw">string</span> {</span><span class="ln">  <span class="tok-kw">let</span> out = <span class="tok-str">''</span>;</span><span class="ln">  <span class="tok-kw">for</span> (<span class="tok-kw">const</span> ch <span class="tok-kw">of</span> key) {</span><span class="ln">    out += MCP_PROPERTY_CHAR_PATTERN.<span class="tok-fn">test</span>(ch) ? ch : <span class="tok-str">'_'</span>;</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">if</span> (out.length === <span class="tok-num">0</span>) out = <span class="tok-str">'_'</span>;</span><span class="ln">  <span class="tok-kw">if</span> (out.length &gt; MAX_KEY_LENGTH) out = out.<span class="tok-fn">slice</span>(<span class="tok-num">0</span>, MAX_KEY_LENGTH);</span><span class="ln">  <span class="tok-kw">return</span> out;</span><span class="ln">}</span></code></pre></div>
+<p>但改了名字之后，模型调用时用的还是新名字。
+所以必须留一张反向映射表（<code>keyMap: Map&lt;string, string&gt;</code>），
+<code>SanitizedMcpInputSchema</code> 的注释（<code>:40-42</code>）说：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"> * - <span class="tok-str">`keyMap`</span> <span class="tok-kw">is</span> <span class="tok-str">`null`</span> when no rewriting occurred. Otherwise it maps</span><span class="ln"> *   <span class="tok-str">`sanitized → original`</span> <span class="tok-kw">for</span> the top-level properties, ready to be used by</span><span class="ln"> *   {@link restoreOriginalArgKeys}.</span></code></pre></div>
+<p><strong>补丁二：幽灵 required。</strong>
+有些服务器在 <code>required</code> 里列了 <code>properties</code> 中不存在的字段，
+比如占位符 <code>//TODO: Add Field Name 0</code>。
+严格的上游（注释点名 Moonshot/Kimi）会拒掉整个 schema（<code>:68-69</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"> * (<span class="tok-str">`required property ... is not defined in properties`</span>), which breaks every</span><span class="ln"> * request <span class="tok-kw">in</span> the session, so we prune those ghost entries defensively.</span></code></pre></div>
+<p><code>pruneGhostRequired</code>（<code>:74-96</code>）只删字符串型的不存在项，
+非字符串原样保留——因为非字符串本来就不合法，删了也没意义。</p>
+<p><strong>补丁三：只改顶层。</strong>
+注释（<code>:101-105</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"> * Only rewrites <span class="tok-str">`properties`</span> <span class="tok-fn">keys</span> (and mirrors the same rewrites into the</span><span class="ln"> * <span class="tok-str">`required`</span> array). Nested <span class="tok-str">`properties`</span> inside array <span class="tok-str">`items`</span> / <span class="tok-kw">object</span></span><span class="ln"> * children are intentionally left alone — <span class="tok-kw">in</span> practice the constraint <span class="tok-kw">is</span></span><span class="ln"> * enforced at the top level, and leaving nested structures untouched keeps</span><span class="ln"> * the reverse-<span class="tok-kw">map</span> (and therefore the MCP call path) simple and correct.</span></code></pre></div>
+<p>嵌套结构不动，因为反向映射表要跟着嵌套走，容易出错。
+而实际上 API 只在顶层校验——这是个「按实际情况裁剪」的务实选择。</p>
+<h2 id="sec-7-六-参数类型强转">六、参数类型强转</h2>
+<p><code>executeRaw</code>（<code>packages/core/src/mcp/tools/mcp-tool.ts:290-</code>）开头有个细节（<code>:296-300</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">// Coerce argument types based on MCP schema to handle models</span></span><span class="ln"><span class="tok-com">// that output all parameter values as strings.</span></span><span class="ln"><span class="tok-kw">const</span> schemaProps = (</span><span class="ln">  <span class="tok-kw">this</span>.toolParameterSchema <span class="tok-kw">as</span> Record&lt;<span class="tok-kw">string</span>, <span class="tok-kw">unknown</span>&gt; | <span class="tok-kw">undefined</span></span><span class="ln">)?.[<span class="tok-str">'properties'</span>] <span class="tok-kw">as</span> Record&lt;<span class="tok-kw">string</span>, <span class="tok-kw">unknown</span>&gt; | <span class="tok-kw">undefined</span>;</span></code></pre></div>
+<p>有些模型会把所有参数都输出成字符串——<code>{&quot;count&quot;: &quot;5&quot;}</code> 而不是 <code>{&quot;count&quot;: 5}</code>。
+MCP 服务器收到字符串 <code>&quot;5&quot;</code> 可能直接报参数类型错误。
+所以这里按 schema 强转回来。</p>
+<p>这条注释值得记住：<strong>不要相信模型输出的类型</strong>，schema 才是真相。</p>
+<h2 id="sec-8-七-工具执行三阶段">七、工具执行三阶段</h2>
+<p><code>DiscoveredMCPToolInvocation</code>（<code>:234</code>）继承 <code>BaseToolInvocation</code>，
+<code>execute()</code>（<code>:286-288</code>）只有一行：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">async</span> <span class="tok-fn">execute</span>(signal: AbortSignal): Promise&lt;ToolResult&gt; {</span><span class="ln">  <span class="tok-kw">return</span> <span class="tok-kw">this</span>.<span class="tok-fn">executeRaw</span>(signal);</span><span class="ln">}</span></code></pre></div>
+<p>为什么包一层？因为基类的 <code>execute</code> 是模板方法——
+子类只实现 <code>executeRaw</code>，基类负责计时、日志、错误包装。
+这是标准 Template Method，但值得指出：<strong><code>signal</code> 一路透传到底</strong>，
+工具自己不需要知道取消逻辑，只要把它转给 HTTP 客户端。</p>
+<p>结果处理的链条在 <code>:737-886</code>，三个函数：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>函数</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>extractMcpErrorMessage</code></td>
+<td>从响应里抠出错误文本</td>
+</tr>
+<tr>
+<td><code>transformMcpContentToSemanticBlocks</code></td>
+<td>MCP 内容转语义块</td>
+</tr>
+<tr>
+<td><code>normalizeMcpToolResult</code></td>
+<td>归一化成 <code>ToolResult</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>MCP 的返回可能是文本、图片、音频、资源链接（<code>:591-737</code> 四个 transform）。
+全部要转成内部统一的 <code>SemanticBlock</code>，否则上层的渲染层要认识 MCP 协议。</p>
+<h2 id="sec-9-八-工程暗坑">八、工程暗坑</h2>
+<p><strong>1. <code>applyMcpTools</code> 每次 <code>getSchema</code> 都跑</strong>
+<code>:191</code> 那行 <code>this.applyMcpTools()</code> 没有缓存判断。
+靠的是内部 <code>getKnownTool(...) !== entry.tool</code> 的引用比较来做幂等。
+如果 MCP 服务器每次返回新对象，就会反复注销重注册。</p>
+<p><strong>2. <code>onToolListChange</code> 订阅必须 <code>dispose</code></strong>
+<code>:215</code> 的 <code>this.unsubscribeMcp ??=</code> 保证只订阅一次，
+但 <code>dispose()</code>（<code>:206-209</code>）必须被调用，否则 MCP 管理器持有注册表引用，
+会话结束也回收不掉。</p>
+<p><strong>3. required 镜像必须同步</strong>
+改写 <code>properties</code> 键之后，<code>required</code> 数组里对应的字符串也要改。
+漏改会让新键变成「不在 required 里」，旧键变成「required 但不存在」——
+等于同时触发幽灵 required 错误。</p>
+<p><strong>4. 通配名不能进注册表</strong>
+<code>formatMcpToolName('*', '*')</code> 产出 <code>mcp__*</code>，这是给权限规则匹配用的。
+如果真去 <code>registerTool('mcp__*')</code>，会污染 <code>allKnownTools</code>。</p>
+<p><strong>5. <code>Skill</code> 工具会改 <code>toolUseContext</code></strong>
+<code>packages/core/src/event-bus/conversation/tools-settled.ts:91-106</code> 里，
+工具结果可以带 <code>contextModifier</code>：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">// Tool results carry contextModifier entries (e.g. Skill activation); apply</span></span><span class="ln"><span class="tok-com">// them in model order so overrides and overlays persist across requests.</span></span></code></pre></div>
+<p><code>Skill</code> 工具通过这个机制切换模型和思考预算。
+这是个隐藏的强耦合：工具不但返回结果，还能改后续请求的配置。</p>
+<h2 id="sec-10-九-本章源码索引">九、本章源码索引</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>行数</th>
+<th>本章用到的位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packages/core/src/tools/tool-names.ts</code></td>
+<td>658</td>
+<td><code>:471-525</code> 45 个内置工具，<code>:531</code> 预设</td>
+</tr>
+<tr>
+<td><code>packages/core/src/tools/tool-registry.ts</code></td>
+<td>1,129</td>
+<td><code>:144-179</code> 字段与四个缓存</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:185-203</code> getSchema，<code>:211-232</code> applyMcpTools</td>
+</tr>
+<tr>
+<td><code>packages/core/src/tools/tools.ts</code></td>
+<td>1,434</td>
+<td>工具基类与通用类型</td>
+</tr>
+<tr>
+<td><code>packages/core/src/tools/streaming-tool-executor.ts</code></td>
+<td>770</td>
+<td>流式执行器</td>
+</tr>
+<tr>
+<td><code>packages/core/src/tool-executor/state-manager.ts</code></td>
+<td>605</td>
+<td>执行状态管理</td>
+</tr>
+<tr>
+<td><code>packages/core/src/tool-executor/types.ts</code></td>
+<td>293</td>
+<td>执行器类型</td>
+</tr>
+<tr>
+<td><code>packages/core/src/mcp/tools/mcp-tool.ts</code></td>
+<td>1,336</td>
+<td><code>:97-119</code> 名字拼装</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:286-300</code> executeRaw，<code>:737-886</code> 结果归一化</td>
+</tr>
+<tr>
+<td><code>packages/core/src/mcp/mcp-schema-sanitizer.ts</code></td>
+<td>260</td>
+<td><code>:26</code> 键约束，<code>:53-61</code> sanitizeKey</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:74-96</code> pruneGhostRequired</td>
+</tr>
+<tr>
+<td><code>packages/core/src/mcp/sessionMcpManager/sessionMcpManager.ts</code></td>
+<td>1,810</td>
+<td>MCP 会话管理</td>
+</tr>
+<tr>
+<td><code>packages/core/src/mcp/client/mcpClient.ts</code></td>
+<td>914</td>
+<td>MCP 客户端</td>
+</tr>
+<tr>
+<td><code>packages/core/src/mcp/connector/connectMcpServer.ts</code></td>
+<td>386</td>
+<td>连接建立</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="sec-11-十-自己动手验证">十、自己动手验证</h2>
+<div class="code-block" data-lang="bash">
+<div class="code-head"><span class="lang">bash</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">node qw-examples/check/07-tools-mcp.mjs</span></code></pre></div>
+<p>预期输出：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">builtin tools: 45</span><span class="ln">tool presets: 1</span><span class="ln">registry fields: 12</span><span class="ln">getSchema paths: 4</span><span class="ln">schema sanitizer regex: /^[a-zA-Z0-9_.-]{1,64}$/</span><span class="ln">mcp name parts: 3</span><span class="ln">  1129 tools/tool-registry.ts</span><span class="ln">  1336 mcp/tools/mcp-tool.ts</span><span class="ln">   260 mcp/mcp-schema-sanitizer.ts</span><span class="ln">  1810 mcp/sessionMcpManager/sessionMcpManager.ts</span><span class="ln">   914 mcp/client/mcpClient.ts</span></code></pre></div>
+<p>改一处试试：把 <code>applyMcpTools()</code> 里
+<code>if (this.getKnownTool(entry.qualifiedName) !== entry.tool)</code> 的引用判断
+改成永远 <code>registerTool</code>。
+然后接一台 MCP 服务器，连续发 10 条消息：
+<code>allKnownTools</code> 大小不变，但每次都会触发 <code>sortTools()</code> 和缓存失效，
+schema 缓存命中率归零——每次请求都要重新转换整套工具定义。</p>
+<h2 id="sec-12-十一-下一步">十一、下一步</h2>
+<p>工具会执行，也可能出错、可能碰到权限、可能被钩子拦下。
+本章只讲了「怎么注册和调」，没讲「谁能调、调之前要过几关」。
+下一章 Q08 拆两层：<strong>权限</strong>（能不能做）与<strong>钩子</strong>（做之前要不要先问你）。
+<code>packages/core/src/hooks/</code> 与权限判定链路，是产品级 Harness 与玩具实现的分水岭。</p>
+<hr>
+<blockquote>
+<p><strong>本章读完你应该能回答</strong>：
+① 内置工具几个？<code>Agent</code> 与 <code>explore</code> 什么关系？
+——45 个；<code>explore</code> 是 <code>Agent</code> 的 <code>subagent_type</code> 参数，不是独立工具。
+② MCP 工具凭什么算「内置」？
+——它继承同一基类，注册进同一张表，<code>getSchema</code> 不区分来源。
+③ 为什么 MCP schema 要改写键名？改写后怎么还原？
+——API 限制键名 <code>^[a-zA-Z0-9_.-]{1,64}$</code>；靠 <code>keyMap</code> 反查。
+④ 幽灵 required 不删会怎样？
+——严格上游会拒掉整个 schema，此后整场会话所有请求全失败。
+⑤ <code>Skill</code> 工具为什么能改后续请求的行为？
+——工具结果带 <code>contextModifier</code>，在 <code>handleToolResults</code> 里被应用。</p>
+</blockquote>
+
+<div class="pager">
+      <a class="prev" href="q06-message-protocol.html"><span class="lbl">上一篇</span>消息协议 —— 七种消息如何投影成一次请求</a>
+      <a class="next" href="q08-permission-hooks.html"><span class="lbl">下一篇</span>权限与钩子 —— 两道闸门如何拦住一次工具调用</a>
+    </div>
+</main>
+<nav class="toc"><div class="toc-title">本章目录</div><a href="#sec-1-一-45-个内置工具" class="">一、45 个内置工具</a><a href="#sec-2-二-toolregistry-的四个缓存" class="">二、ToolRegistry 的四个缓存</a><a href="#sec-3-三-mcp-工具怎么变成内置工具" class="">三、MCP 工具怎么变成内置工具</a><a href="#sec-4-三-mcp-工具怎么变成内置工具" class="">三、MCP 工具怎么变成内置工具</a><a href="#sec-5-四-mcp-名字的三段式" class="">四、MCP 名字的三段式</a><a href="#sec-6-五-三个必须打的补丁" class="">五、三个必须打的补丁</a><a href="#sec-7-六-参数类型强转" class="">六、参数类型强转</a><a href="#sec-8-七-工具执行三阶段" class="">七、工具执行三阶段</a><a href="#sec-9-八-工程暗坑" class="">八、工程暗坑</a><a href="#sec-10-九-本章源码索引" class="">九、本章源码索引</a><a href="#sec-11-十-自己动手验证" class="">十、自己动手验证</a><a href="#sec-12-十一-下一步" class="">十一、下一步</a></nav>
+</div>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var key = "qw-book-theme";
+  var saved = localStorage.getItem(key);
+  if (saved) root.setAttribute("data-theme", saved);
+  var btn = document.getElementById("theme-toggle");
+  function label() {
+    btn.textContent = root.getAttribute("data-theme") === "dark" ? "浅色" : "深色";
+  }
+  label();
+  btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem(key, next);
+    label();
+  });
+
+  var rail = document.getElementById("progress-rail");
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    rail.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+  if (links.length) {
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+    function mark() {
+      var best = -1;
+      targets.forEach(function (t, i) {
+        if (t && t.getBoundingClientRect().top <= 120) best = i;
+      });
+      links.forEach(function (a, i) { a.classList.toggle("active", i === best); });
+    }
+    document.addEventListener("scroll", mark, { passive: true });
+    mark();
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(
+        function () { return true; },
+        function () { return legacyCopy(text); }
+      );
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function legacyCopy(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  // 代码块复制：双击 HTML 打开时没有 secure context，所以留了 execCommand 退路
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest(".copy");
+    if (!button) return;
+    var lines = button.closest(".code-block").querySelectorAll(".ln");
+    var text = Array.prototype.map.call(lines, function (line) {
+      return line.textContent;
+    }).join("\n"); // 在模板字符串里必须写成 \n，否则产物中字符串字面量跨行、整块脚本语法错误
+    copyText(text).then(function (ok) {
+      button.textContent = ok ? "已复制" : "复制失败";
+      button.classList.toggle("is-done", ok);
+      setTimeout(function () {
+        button.textContent = "复制";
+        button.classList.remove("is-done");
+      }, 1200);
+    });
+  });
+})();
+</script>
+</body>
+</html>

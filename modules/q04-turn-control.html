@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>对话与回合 —— 一次请求如何被五个 handler 接力跑完 · Qwen Code 源码级教程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body class="is-module">
+<div class="progress-rail" id="progress-rail"></div>
+<header class="topbar">
+  <a class="brand" href="../index.html">Qwen <b>Code</b> 源码级教程</a>
+  <span class="spacer"></span>
+  <button id="theme-toggle" type="button">深色</button>
+</header>
+<div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
+                <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
+                <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
+                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="active">
+                <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
+                <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
+                <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
+                <span class="code">Q07</span><span>工具与 MCP —— 45 个内置工具如何接进同一张表</span></a><a href="q08-permission-hooks.html" class="">
+                <span class="code">Q08</span><span>权限与钩子 —— 两道闸门如何拦住一次工具调用</span></a></div><div class="part"><div class="part-title">Part C · 上下文与资产</div><a href="q09-context-engineering.html" class="">
+                <span class="code">Q09</span><span>上下文工程 —— 三层记忆与并发飞行</span></a><a href="q10-compaction.html" class="">
+                <span class="code">Q10</span><span>记忆压缩 —— 14 种失败原因与一道熔断</span></a><a href="q11-skills-plugins.html" class="">
+                <span class="code">Q11</span><span>技能与插件 —— 能执行 shell 的提示词</span></a><a href="q12-agents-workflow.html" class="">
+                <span class="code">Q12</span><span>Agent 与 Workflow —— 六种终止模式与四个内置代理</span></a></div><div class="part"><div class="part-title">Part D · 使用侧</div><a href="q13-frameworks.html" class="">
+                <span class="code">Q13</span><span>ACP 与 headless —— 内核怎么接进编辑器与脚本</span></a><a href="q14-ink-tui.html" class="">
+                <span class="code">Q14</span><span>TUI 与 ink —— 为什么要把渲染库 fork 进来</span></a></div><div class="part"><div class="part-title">Part E · 实战拓展</div><a href="q15-custom-tool.html" class="">
+                <span class="code">Q15</span><span>实战一：写一个自定义工具</span></a><a href="q16-hooks.html" class="">
+                <span class="code">Q16</span><span>实战二：写一个钩子——三道拦截</span></a><a href="q17-skills.html" class="">
+                <span class="code">Q17</span><span>实战三：写一个技能——发版一条龙</span></a><a href="q18-mcp.html" class="">
+                <span class="code">Q18</span><span>实战四：写一个 MCP 服务器</span></a><a href="q19-headless.html" class="">
+                <span class="code">Q19</span><span>实战五：headless 流水线</span></a></div><div class="part"><div class="part-title">附录</div><a href="q21-appendix-a.html" class="">
+                <span class="code">附录 A</span><span>附录 A · 按问题查</span></a><a href="q20-appendix-b.html" class="">
+                <span class="code">附录 B</span><span>附录 B · 源码坐标总表</span></a></div></aside>
+<div class="main">
+<main class="prose">
+<header class="module-header">
+      <div class="module-eyebrow">Q04</div>
+      <h1>对话与回合 —— 一次请求如何被五个 handler 接力跑完</h1>
+      <div class="module-meta">2,095 字 · 189 行代码 · 18 块 · 约 18 分钟</div>
+    </header>
+    <p>Q03 讲了事件怎么在总线上流动，但只到「事件被投递」为止。
+真正把一次对话往前推的，是<strong>四个 handler 的接力</strong>：
+有人收输入、有人调模型、有人跑工具、有人判终态。
+本章就拆这台接力机器。</p>
+<h2 id="sec-1-一-回合是什么-queryround-的十个字段">一、回合是什么：<code>QueryRound</code> 的十个字段</h2>
+<p>「回合」不是模型回复一次，而是<strong>一次请求及其后续</strong>。
+它的数据结构是 <code>QueryRound</code>（<code>packages/core/src/event-bus/state.ts:137-155</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">interface</span> QueryRound {</span><span class="ln">  <span class="tok-kw">readonly</span> roundId: <span class="tok-kw">string</span>;</span><span class="ln">  <span class="tok-kw">readonly</span> reason: RequestReason;</span><span class="ln">  <span class="tok-kw">readonly</span> requestIndex: <span class="tok-kw">number</span>;</span><span class="ln">  <span class="tok-com">/** Written once by Tool, then tool.settled. */</span></span><span class="ln">  toolSummary?: ToolExecutionSummary;</span><span class="ln">}</span></code></pre></div>
+<p>三个 <code>readonly</code> 是创建时就定死的身份：<code>roundId</code>（随机）、<code>reason</code>（为什么发这次请求）、
+<code>requestIndex</code>（会话里第几次）。其余七个都是<strong>可选的，且由不同 handler 写入</strong>。</p>
+<p>源码里这几个字段各自带着注释：'Written once by Llm'、'Written once by Tool'。
+这不是随手写的。每个字段有<strong>唯一写入者</strong>，且只写一次。
+这个约定让「谁改了状态」永远只有唯一答案——
+出问题时不用猜是 Llm 还是 Tool 把 <code>modelResult</code> 弄脏了。</p>
+<h2 id="sec-2-二-dispatch-五路事件分流">二、dispatch：五路事件分流</h2>
+<p>所有事件进同一个入口。
+<code>ConversationHandler.dispatch</code>（<code>packages/core/src/event-bus/conversation-handler.ts:88-105</code>）
+是个五路 switch：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">private</span> <span class="tok-kw">async</span> <span class="tok-fn">dispatch</span>(state: QueryState, event: AnyBusEvent): Promise&lt;<span class="tok-kw">void</span>&gt; {</span><span class="ln">  <span class="tok-kw">switch</span> (event.<span class="tok-kw">type</span>) {</span><span class="ln">    <span class="tok-kw">case</span> <span class="tok-str">'query.submitted'</span>:</span><span class="ln">    <span class="tok-kw">case</span> <span class="tok-str">'llm.settled'</span>:</span><span class="ln">    <span class="tok-kw">case</span> <span class="tok-str">'tool.settled'</span>:</span><span class="ln">    <span class="tok-kw">case</span> <span class="tok-str">'query.cancelled'</span>:</span><span class="ln">    <span class="tok-kw">case</span> <span class="tok-str">'handler.failed'</span>:</span></code></pre></div>
+<p>五种事件：用户提交、模型落定、工具落定、取消、handler 自己失败。
+<strong>只有这五种</strong>。Q03 讲过的其它事件类型（流式增量、状态通知）不经过这里——
+它们是「给别人看的」，不驱动对话前进。</p>
+<p>好处很直接：<strong>对话状态机只有五个入口</strong>。
+想知道「为什么会进入这个状态」，只需查这五个 case 谁被触发了。</p>
+<h2 id="sec-3-三-谁写哪个字段-四方的分工">三、谁写哪个字段：四方的分工</h2>
+<p><code>QueryRound</code> 的注释已经把分工写出来了。整理成表：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>写入者</th>
+<th>什么时候</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>selection</code> <code>taskTrigger</code></td>
+<td>Llm</td>
+<td>首次模型选择之后</td>
+</tr>
+<tr>
+<td><code>dispatch</code></td>
+<td>Llm</td>
+<td>响应开始流式之前</td>
+</tr>
+<tr>
+<td><code>modelResult</code></td>
+<td>Llm</td>
+<td>响应结束，随后发 <code>llm.settled</code></td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td>Tool</td>
+<td>本回合工具工作态</td>
+</tr>
+<tr>
+<td><code>toolSummary</code></td>
+<td>Tool</td>
+<td>工具结束，随后发 <code>tool.settled</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>顺序是有向的：<code>dispatch</code> → <code>modelResult</code> → <code>tools</code> → <code>toolSummary</code>。
+这条链解释了第五节要讲的「七道门」为什么按那个顺序排——
+<strong>门的存在是为了保护字段的写入前提</strong>。</p>
+<p>两个函数说明了这种保护：
+<code>writePrepared</code>（<code>model-settled.ts:65-80</code>）只在 <code>prepared.requestSent</code> 为真时，
+才把 <code>requestIndex</code> 与 <code>toolUseContext</code> 写回 <code>state</code>——
+<strong>请求没真发出去，就不认这是新的一轮</strong>。
+<code>needsToolSettlement</code>（<code>:82-91</code>）则在 <code>toolExecutor</code> 存在、且
+<code>dispatchedToolUseBlocks</code> 或 <code>toolUseBlocks</code> 非空时返回真——
+没有工具调用的回合，不该走工具结算。</p>
+<h2 id="sec-4-四-handlellmsettled-两条大路">四、handleLlmSettled：两条大路</h2>
+<p><code>onLlmSettled</code> 交棒给 <code>model-settled.ts</code> 的 <code>handleLlmSettled</code>（<code>:93-103</code>），
+它只有两行有效判断：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">handleLlmSettled</span>(</span><span class="ln">  ctx: ConversationContext,</span><span class="ln">  round: QueryRound,</span><span class="ln">): Promise&lt;<span class="tok-kw">void</span>&gt; {</span><span class="ln">  <span class="tok-kw">const</span> result = round.modelResult!;</span><span class="ln">  <span class="tok-kw">if</span> (</span><span class="ln">    result.outcome === <span class="tok-str">'failed'</span> &amp;&amp;</span><span class="ln">    result.failure !== <span class="tok-str">'max_tokens_escalatable'</span></span><span class="ln">  ) {</span><span class="ln">    <span class="tok-kw">await</span> <span class="tok-fn">handleFailedRequest</span>(ctx, round, result);</span><span class="ln">    <span class="tok-kw">return</span>;</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">await</span> <span class="tok-fn">handleResponse</span>(ctx, round, result);</span><span class="ln">}</span></code></pre></div>
+<p><code>outcome</code> 三个值：<code>complete</code> / <code>interrupted</code> / <code>failed</code>（<code>events.ts:34</code>）。
+分叉点只有一个例外：<strong><code>max_tokens_escalatable</code> 虽属 failed，但不当失败处理</strong>。
+输出被截断是可救的——请求方只是把 <code>maxOutputTokens</code> 调大重发就行，
+所以它走 <code>handleResponse</code> 的正常路径，在内部专门有一段
+（<code>model-settled.ts:360-371</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">if</span> (result.failure === <span class="tok-str">'max_tokens_escalatable'</span>) {</span><span class="ln">  runLogger.<span class="tok-fn">debug</span>(</span><span class="ln">    [</span><span class="ln">      <span class="tok-str">'[AgentLoop] max-output-tokens escalation: '</span>,</span><span class="ln">      state.runtime.maxOutputTokensOverride ??</span><span class="ln">        state.model?.initialMaxOutputTokens,</span><span class="ln">      <span class="tok-str">' -&gt; '</span>,</span><span class="ln">      result.nextMaxOutputTokens,</span><span class="ln">    ].<span class="tok-fn">join</span>(<span class="tok-str">''</span>),</span><span class="ln">  );</span><span class="ln">  state.runtime = <span class="tok-fn">buildMaxOutputTokensEscalationState</span>({</span><span class="ln">    state: state.runtime,</span><span class="ln">    nextMaxOutputTokens: result.nextMaxOutputTokens!,</span><span class="ln">  });</span><span class="ln">  state.cumulativeResponseText = <span class="tok-str">''</span>;</span><span class="ln">  <span class="tok-kw">await</span> ctx.<span class="tok-fn">request</span>(<span class="tok-str">'escalation'</span>);</span><span class="ln">  <span class="tok-kw">return</span>;</span><span class="ln">}</span></code></pre></div>
+<p>堆栈靠 <code>state.runtime</code> 逐层传递：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">query.submitted</span><span class="ln">  -&gt; handleSubmitted        request('initial')</span><span class="ln">    -&gt; llm.settled</span><span class="ln">      -&gt; handleLlmSettled</span><span class="ln">        -&gt; handleResponse</span><span class="ln">          -&gt; 无工具 + end_turn  -&gt; runStopHook -&gt; finish('end_turn')</span><span class="ln">          -&gt; 有工具              -&gt; afterTools('tool_results')</span><span class="ln">          -&gt; 截断可救            -&gt; request('escalation')</span><span class="ln">          -&gt; 流中断无工具         -&gt; request('stream_recovery')</span><span class="ln">          -&gt; 被取消              -&gt; finish('abort')</span></code></pre></div>
+<h2 id="sec-5-五-handleresponse-的七道门">五、handleResponse 的七道门</h2>
+<p><code>handleResponse</code>（<code>:319-724</code>）是全书第二长的函数，406 行。
+它按顺序过七道门，每道门都是一次 <code>return</code>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>条件</th>
+<th>出口</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>failure === 'max_tokens_escalatable'</code></td>
+<td><code>request('escalation')</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>interrupted</code> 且 <code>toolUseBlocks.length === 0</code></td>
+<td><code>finish</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>stopReason === 'refusal'</code></td>
+<td><code>finishRefusal</code> 或 <code>afterTools('refusal')</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>malformedToolUse</code></td>
+<td><code>request('malformed')</code> 或 <code>finish(error)</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>cancelled.aborted</code> 且非 interrupted</td>
+<td><code>finish('abort')</code></td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>interrupted</code> 且无工具</td>
+<td><code>request('stream_recovery')</code></td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>toolUseBlocks.length === 0</code></td>
+<td><code>runStopHook</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>七道都不命中，才落到最后两行（<code>:720-723</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">if</span> (interrupted &amp;&amp; settled.terminalInterruption) {</span><span class="ln">  ctx.<span class="tok-fn">cancelTools</span>(<span class="tok-str">'terminal_interruption'</span>);</span><span class="ln">}</span><span class="ln">ctx.<span class="tok-fn">afterTools</span>({ kind: <span class="tok-str">'tool_results'</span> });</span></code></pre></div>
+<p><strong>这就是 Q03 那个问题的答案</strong>：判断依据不是「模型说了什么」，
+而是 <code>toolUseBlocks.length</code>。有工具调用就必须先让工具跑完，
+哪怕模型同时输出了完整答案。</p>
+<p>第 7 道门最容易被忽略。<code>runStopHook</code>（<code>:838-908</code>）在收工前还要问一次钩子：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">if</span> (continuation.terminalReason === <span class="tok-str">'stopped'</span>) {</span><span class="ln">  <span class="tok-fn">finishData</span>(<span class="tok-str">'stopped_by_after_hook'</span>);</span><span class="ln">  <span class="tok-kw">await</span> ctx.<span class="tok-fn">finish</span>({</span><span class="ln">    reason: <span class="tok-str">'end_turn'</span>,</span><span class="ln">    terminalDetail: <span class="tok-str">'hook_stopped'</span>,</span><span class="ln">    ...ctx.<span class="tok-fn">terminalBase</span>(settled.nextTurnCount),</span><span class="ln">  });</span><span class="ln">  <span class="tok-kw">return</span>;</span><span class="ln">}</span><span class="ln"><span class="tok-kw">if</span> (continuation.continuationMessage &amp;&amp; continuation.nextState) {</span><span class="ln">  ctx.<span class="tok-fn">emit</span>(continuation.continuationMessage);</span><span class="ln">  state.runtime = continuation.nextState;</span><span class="ln">  state.cumulativeResponseText = <span class="tok-str">''</span>;</span><span class="ln">  <span class="tok-kw">await</span> ctx.<span class="tok-fn">request</span>(<span class="tok-str">'stop_hook'</span>);</span><span class="ln">  <span class="tok-kw">return</span>;</span><span class="ln">}</span></code></pre></div>
+<p>所以「模型说完最后一句话」并不等于结束。
+Stop 钩子可以投票两件事：停止（<code>hook_stopped</code>），或者
+<strong>塞一条消息进去再来一轮</strong>（<code>request('stop_hook')</code>）。</p>
+<h2 id="sec-6-六-ontoolsettled-与-aftertools-的耦合">六、onToolSettled 与 afterTools 的耦合</h2>
+<p>工具结算走另一条路（<code>conversation-handler.ts:130-146</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">private</span> <span class="tok-kw">async</span> <span class="tok-fn">onToolSettled</span>(</span><span class="ln">  ctx: ConversationContext,</span><span class="ln">  event: BusEvent&lt;<span class="tok-str">'tool.settled'</span>&gt;,</span><span class="ln">): Promise&lt;<span class="tok-kw">void</span>&gt; {</span><span class="ln">  <span class="tok-kw">const</span> { state } = ctx;</span><span class="ln">  <span class="tok-kw">const</span> round = <span class="tok-fn">currentRound</span>(state, event.roundId);</span><span class="ln">  <span class="tok-kw">if</span> (!round?.toolSummary || !state.flow.toolsInFlight) <span class="tok-kw">return</span>;</span><span class="ln">  state.flow.toolsInFlight = <span class="tok-kw">false</span>;</span><span class="ln">  <span class="tok-kw">if</span> (state.flow.failure) {</span><span class="ln">    <span class="tok-kw">await</span> <span class="tok-kw">this</span>.<span class="tok-fn">finalizeFailure</span>(ctx);</span><span class="ln">    <span class="tok-kw">return</span>;</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">const</span> continuation = state.flow.afterTools;</span><span class="ln">  state.flow.afterTools = <span class="tok-kw">undefined</span>;</span><span class="ln">  <span class="tok-kw">if</span> (!continuation) <span class="tok-kw">return</span>;</span><span class="ln">  <span class="tok-kw">await</span> <span class="tok-kw">this</span>.<span class="tok-fn">continueAfterTools</span>(ctx, continuation);</span><span class="ln">}</span></code></pre></div>
+<p>关键在 <code>state.flow.afterTools</code>。
+模型结算时（<code>handleResponse</code> 结尾）并不知道工具会跑成什么样，
+所以它只<strong>登记意图</strong>：<code>ctx.afterTools({ kind: 'tool_results' })</code>。
+等工具结算事件到了，<code>onToolSettled</code> 才取出这个意图并执行。</p>
+<p><code>afterTools</code> 的实现只有一行（<code>conversation-handler.ts:262-264</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">afterTools: (continuation) =&gt; {</span><span class="ln">  state.flow.afterTools = continuation;</span><span class="ln">},</span></code></pre></div>
+<p>意图有六种（<code>state.ts:210-216</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">type</span> ToolContinuation =</span><span class="ln">  | { kind: <span class="tok-str">'abort_streaming'</span> }</span><span class="ln">  | { kind: <span class="tok-str">'request_error'</span>; error: <span class="tok-kw">unknown</span>; isModelRefusal: <span class="tok-kw">boolean</span> }</span><span class="ln">  | { kind: <span class="tok-str">'refusal'</span> }</span><span class="ln">  | { kind: <span class="tok-str">'aborted_after_assistant'</span> }</span><span class="ln">  | { kind: <span class="tok-str">'tool_results'</span> }</span><span class="ln">  | { kind: <span class="tok-str">'release_then_request'</span>; reason: RequestReason; cause?: <span class="tok-kw">unknown</span> };</span></code></pre></div>
+<p>最后一种 <code>release_then_request</code> 是唯一带 <code>reason</code> 的，
+用于 PTL 与反应式压缩：先释放工具占用的并发槽位，再重发请求。
+这解释了为什么它是独立一种——它的参数结构跟其他五种不一样。</p>
+<h2 id="sec-7-七-终态与细节-五个-reason-十六种细节">七、终态与细节：五个 reason，十六种细节</h2>
+<p><code>ctx.finish()</code> 最终产出 <code>Terminal</code>（<code>packages/core/src/core/query-event.ts:114-138</code>）。
+<code>reason</code> 只有五个值，但实际业务关心的是更细的 <code>terminalDetail</code>。</p>
+<p>于是有了 <code>query-terminal.ts</code> 的分类函数（<code>:55-116</code>），
+把 <code>Terminal</code> 压成 16 种 <code>TaskTerminalReasonDetail</code>：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>细节</th>
+<th>触发条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>aborted_streaming</code></td>
+<td><code>reason='abort'</code> 且 <code>abortKind</code> 已设</td>
+</tr>
+<tr>
+<td><code>aborted_tools</code></td>
+<td>同上，工具阶段取消</td>
+</tr>
+<tr>
+<td><code>repeated_tool_call_denied</code></td>
+<td>重复调用被拒的专用 reason</td>
+</tr>
+<tr>
+<td><code>max_turns</code></td>
+<td>撞上最大回合数</td>
+</tr>
+<tr>
+<td><code>hook_stopped</code></td>
+<td>Stop 钩子投票停止</td>
+</tr>
+<tr>
+<td><code>model_refusal</code></td>
+<td><code>modelStopReason='refusal'</code></td>
+</tr>
+<tr>
+<td><code>prompt_too_long</code></td>
+<td><code>isPromptTooLongError</code></td>
+</tr>
+<tr>
+<td><code>post_compact_context_limit</code></td>
+<td>压缩后仍超限</td>
+</tr>
+<tr>
+<td><code>malformed_tool_use_exhausted</code></td>
+<td>畸形工具调用重试耗尽</td>
+</tr>
+<tr>
+<td><code>model_error</code></td>
+<td>流无效或畸形工具</td>
+</tr>
+<tr>
+<td><code>turn_setup_failed</code></td>
+<td><code>reason='error'</code> 且 <code>requestIndex === 0</code></td>
+</tr>
+<tr>
+<td><code>api_error</code></td>
+<td>同上，但已有请求</td>
+</tr>
+<tr>
+<td><code>unclassified_error</code></td>
+<td>错误类型未知</td>
+</tr>
+<tr>
+<td><code>unclassified_abort</code></td>
+<td><code>reason='abort'</code> 无 <code>abortKind</code></td>
+</tr>
+<tr>
+<td><code>unclassified_terminal</code></td>
+<td>兜底</td>
+</tr>
+<tr>
+<td><code>completed</code></td>
+<td><code>reason='end_turn'</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>注意 <code>turn_setup_failed</code> 与 <code>api_error</code> 的区别只看一个数：
+<code>requestIndex === 0</code>（<code>:94</code>）。
+首个请求就崩，多半是配置或鉴权有问题；
+跑到第 N 个请求才崩，更可能是模型侧的瞬时故障。
+这个区分直接影响诊断入口，所以值得单独开两个枚举值。</p>
+<p>函数末尾还有一句注释（<code>:114</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">// Concrete fallback: an absent field would stay indistinguishable from</span></span><span class="ln"><span class="tok-com">// clients that report no detail.</span></span><span class="ln"><span class="tok-kw">return</span> { terminalReasonDetail: <span class="tok-str">'unclassified_terminal'</span> };</span></code></pre></div>
+<p>宁可返回 <code>unclassified_terminal</code> 也不返回 <code>undefined</code>——
+因为 <code>undefined</code> 和「客户端没上报」在传输层长得一样，
+下游没法区分「不知道」和「没给」。</p>
+<h2 id="sec-8-八-queryturn-与动态回合预算">八、QueryTurn 与动态回合预算</h2>
+<p>前面说的 <code>turnCount</code> 是请求计数，<code>QueryTurn</code>（<code>packages/core/src/core/query-turn.ts</code>，168 行）
+是另一套东西：<strong>给钩子用的回合宿主</strong>。</p>
+<p>它管六个阶段（<code>turn-hooks.ts:154-161</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">interface</span> TurnHookRegistrar {</span><span class="ln">  (stage: <span class="tok-str">'turn.start'</span>, handler: TurnStartHandler): <span class="tok-kw">void</span>;</span><span class="ln">  (stage: <span class="tok-str">'turn.step'</span>, handler: TurnStepHandler): <span class="tok-kw">void</span>;</span><span class="ln">  (stage: <span class="tok-str">'turn.complete'</span>, handler: TurnCompleteHandler): <span class="tok-kw">void</span>;</span><span class="ln">  (stage: <span class="tok-str">'turn.run.start'</span>, handler: TurnRunStartHandler): <span class="tok-kw">void</span>;</span><span class="ln">  (stage: <span class="tok-str">'turn.step.result'</span>, handler: TurnStepResultHandler): <span class="tok-kw">void</span>;</span><span class="ln">  (stage: <span class="tok-str">'turn.run.end'</span>, handler: TurnRunEndHandler): <span class="tok-kw">void</span>;</span><span class="ln">}</span></code></pre></div>
+<p><code>step</code> 是异步中间件（能包住模型调用），其余五个是同步旁听；
+这个区分在类型上就写死了——<code>TurnStepHandler</code> 返回 <code>TurnStepStream</code>，
+而 <code>TurnStepResultHandler</code> 返回 <code>undefined</code>。</p>
+<p><code>QueryTurn.observe()</code>（<code>:61-83</code>）负责从事件流里摘答案：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-fn">observe</span>(event: QueryEvent): <span class="tok-kw">void</span> {</span><span class="ln">  <span class="tok-kw">if</span> (event.<span class="tok-kw">type</span> === <span class="tok-str">'request_start'</span>) {</span><span class="ln">    <span class="tok-kw">this</span>.awaitingResponse = <span class="tok-kw">true</span>;</span><span class="ln">    <span class="tok-kw">return</span>;</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">if</span> (</span><span class="ln">    event.<span class="tok-kw">type</span> !== <span class="tok-str">'assistant'</span> ||</span><span class="ln">    event.parent_tool_use_id != <span class="tok-kw">null</span> ||</span><span class="ln">    event.isApiErrorMessage ||</span><span class="ln">    event.isVirtual</span><span class="ln">  )</span><span class="ln">    <span class="tok-kw">return</span>;</span><span class="ln">  <span class="tok-kw">if</span> (<span class="tok-kw">this</span>.awaitingResponse) {</span><span class="ln">    <span class="tok-kw">this</span>.answerParts = [];</span><span class="ln">    <span class="tok-kw">this</span>.awaitingResponse = <span class="tok-kw">false</span>;</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">this</span>.answerParts.<span class="tok-fn">push</span>(</span><span class="ln">    ...event.message.content.<span class="tok-fn">flatMap</span>((block) =&gt;</span><span class="ln">      block?.<span class="tok-kw">type</span> === <span class="tok-str">'text'</span> ? [block.text] : [],</span><span class="ln">    ),</span><span class="ln">  );</span><span class="ln">  <span class="tok-kw">this</span>.answer = <span class="tok-kw">this</span>.answerParts.<span class="tok-fn">join</span>(<span class="tok-str">'\n'</span>).<span class="tok-fn">trim</span>();</span><span class="ln">}</span></code></pre></div>
+<p>四个排除条件：子工具的消息（<code>parent_tool_use_id != null</code>）、
+错误提示消息、虚拟消息，都不算答案。
+<code>awaitingResponse</code> 标志保证只取<strong>最后一次请求</strong>的文本——
+中间轮次的叙述会被清掉。</p>
+<p>回合预算在 <code>turn-budget.ts</code>，只有 36 行，核心是这段（<code>:20-34</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">const</span> finalLimit = Math.<span class="tok-fn">min</span>(limits[limits.length - <span class="tok-num">1</span>], hardLimit ?? Infinity);</span><span class="ln"><span class="tok-kw">const</span> stages = [...limits.<span class="tok-fn">filter</span>((limit) =&gt; limit &lt; finalLimit), finalLimit];</span><span class="ln"><span class="tok-kw">return</span> {</span><span class="ln">  finalLimit,</span><span class="ln">  <span class="tok-fn">getSnapshot</span>(turnsUsed: <span class="tok-kw">number</span>): TurnBudgetSnapshot {</span><span class="ln">    <span class="tok-kw">const</span> stage = stages.<span class="tok-fn">findIndex</span>((limit) =&gt; limit &gt; turnsUsed);</span><span class="ln">    <span class="tok-kw">if</span> (stage &lt; <span class="tok-num">0</span>) <span class="tok-kw">return</span> { remainingTurns: <span class="tok-num">0</span>, exhausted: <span class="tok-kw">true</span> };</span><span class="ln">    <span class="tok-kw">const</span> previousLimit = stages[stage - <span class="tok-num">1</span>];</span><span class="ln">    <span class="tok-kw">return</span> {</span><span class="ln">      remainingTurns: stages[stage] - turnsUsed,</span><span class="ln">      ...(stage &gt; <span class="tok-num">0</span> &amp;&amp; turnsUsed === previousLimit</span><span class="ln">        ? { additionalTurns: stages[stage] - previousLimit }</span><span class="ln">        : {}),</span><span class="ln">    };</span><span class="ln">  },</span><span class="ln">};</span></code></pre></div>
+<p>这是一个<strong>分级递增</strong>的预算：<code>limits</code> 必须是严格递增的累积上限。
+比如 <code>[10, 30, 50]</code> 表示：先给 10 轮，用完了再批 20 轮，
+还没完再批 20 轮，上限 50。
+<code>additionalTurns</code> 只在恰好用完上一级的那个瞬间出现——
+所以前端可以拿它弹一句「已追加 20 轮」。</p>
+<p><code>hardLimit &lt;= 0</code> 直接返回 <code>undefined</code>（<code>:19</code>），
+这个返回值被调用方当成「不允许任何模型请求」。</p>
+<h2 id="sec-9-九-工程暗坑">九、工程暗坑</h2>
+<p><strong>1. <code>toolsInFlight</code> 与 <code>afterTools</code> 是两个字段，缺一个就卡死</strong>
+模型结算时先置 <code>toolsInFlight = true</code>（<code>conversation-handler.ts:120-122</code>），
+再在 <code>handleResponse</code> 里登记 <code>afterTools</code>。
+如果只置前者不登记后者，<code>onToolSettled</code> 会把标志翻回 false，
+然后因为 <code>!continuation</code> 直接 <code>return</code>——整个查询静默挂住。
+反过来只登记不置位，<code>onToolSettled</code> 在第二个 <code>if</code> 就 <code>return</code>，
+意图永远等不到执行。两个字段必须在同一个逻辑步里成对出现。</p>
+<p><strong>2. <code>flow.failure</code> 之后所有入口都要先短路</strong>
+<code>onLlmSettled</code>、<code>onToolSettled</code>、<code>dispatch</code> 的 <code>query.cancelled</code>
+三处都有同一个模式：先检查 <code>state.flow.failure</code>，有就 <code>finalizeFailure</code>。
+而 <code>finalizeFailure</code> 自己还要再等一次（<code>:210-214</code>）：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">if</span> (</span><span class="ln">  !state.flow.failure ||</span><span class="ln">  state.flow.llmInFlight ||</span><span class="ln">  state.flow.toolsInFlight</span><span class="ln">) <span class="tok-kw">return</span>;</span><span class="ln"><span class="tok-kw">await</span> <span class="tok-kw">this</span>.<span class="tok-fn">finishThrown</span>(ctx, state.flow.failure.error);</span></code></pre></div>
+<p>它必须等两个 in-flight 标志都归零才真正收尾。
+否则会在工具还没跑完时就发 <code>query.finished</code>，
+后续的工具事件全部落空。</p>
+<p><strong>3. <code>finish</code> 的幂等靠 <code>finishing</code> 标志</strong>
+<code>finish</code>（<code>:361-396</code>）第一行就是 <code>if (state.flow.finishing) return;</code>。
+因为从「第一个失败」到「最后一个 handler 停手」之间，
+可能有多个路径同时想收尾。没有这个标志就会重复发 <code>query.finished</code>，
+消费端收到两次终态，生成器 <code>return()</code> 两次。</p>
+<p><strong>4. <code>max_turns</code> 检查放在 <code>request</code> 里，不放在 <code>handleResponse</code> 里</strong>
+<code>request()</code> 开头（<code>:312-340</code>）先判 <code>turnCount &gt;= maxTurns</code>，
+超了就直接 <code>finish({ reason: 'max_turns' })</code>，且<strong>照样触发 Stop 钩子</strong>。
+注释说得很明确：</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">// max_turns ends the turn like a normal stop: the Stop hook and its</span></span><span class="ln"><span class="tok-com">// TurnComplete still fire, but a continuation request is not accepted and a</span></span><span class="ln"><span class="tok-com">// hook failure does not change the max_turns terminal.</span></span></code></pre></div>
+<p>这是个容易踩的设计点：撞上限<strong>不是异常</strong>，是正常收工；
+钩子照样跑，但钩子报错也不能改写终态。</p>
+<h2 id="sec-10-十-本章源码索引">十、本章源码索引</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>行数</th>
+<th>本章用到的位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packages/core/src/event-bus/conversation-handler.ts</code></td>
+<td>465</td>
+<td><code>:59-71</code> 订阅，<code>:88-109</code> dispatch</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:111-128</code> onLlmSettled，<code>:130-146</code> onToolSettled</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:148-185</code> continueAfterTools，<code>:210-214</code> finalizeFailure</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:262-264</code> afterTools，<code>:312-340</code> max_turns，<code>:361-396</code> finish</td>
+</tr>
+<tr>
+<td><code>packages/core/src/event-bus/conversation/model-settled.ts</code></td>
+<td>909</td>
+<td><code>:82-91</code> needsToolSettlement</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:93-103</code> handleLlmSettled，<code>:319-724</code> handleResponse</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td><code>:838-908</code> runStopHook</td>
+</tr>
+<tr>
+<td><code>packages/core/src/event-bus/conversation/tools-settled.ts</code></td>
+<td>368</td>
+<td><code>:36-252</code> handleToolResults</td>
+</tr>
+<tr>
+<td><code>packages/core/src/event-bus/conversation/submit.ts</code></td>
+<td>334</td>
+<td><code>:44-</code> handleSubmitted</td>
+</tr>
+<tr>
+<td><code>packages/core/src/event-bus/conversation/context.ts</code></td>
+<td>40</td>
+<td>ConversationContext 的九个能力</td>
+</tr>
+<tr>
+<td><code>packages/core/src/event-bus/state.ts</code></td>
+<td>292</td>
+<td><code>:210-216</code> ToolContinuation，<code>:283-292</code> currentRound</td>
+</tr>
+<tr>
+<td><code>packages/core/src/core/query-turn.ts</code></td>
+<td>168</td>
+<td><code>:61-83</code> observe，<code>:134-167</code> complete</td>
+</tr>
+<tr>
+<td><code>packages/core/src/core/query-terminal.ts</code></td>
+<td>116</td>
+<td><code>:55-116</code> classifyTaskTerminal</td>
+</tr>
+<tr>
+<td><code>packages/core/src/core/turn-budget.ts</code></td>
+<td>36</td>
+<td>分级递增预算</td>
+</tr>
+<tr>
+<td><code>packages/core/src/core/turn-hooks.ts</code></td>
+<td>664</td>
+<td><code>:154-161</code> 六阶段注册器</td>
+</tr>
+<tr>
+<td><code>packages/core/src/core/query-event.ts</code></td>
+<td>138</td>
+<td><code>:114-138</code> Terminal</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="sec-11-十一-自己动手验证">十一、自己动手验证</h2>
+<p>本章的可数断言都写成了一个脚本：</p>
+<div class="code-block" data-lang="bash">
+<div class="code-head"><span class="lang">bash</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">node qw-examples/check/04-turn-control.mjs</span></code></pre></div>
+<p>预期输出：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">subscribes: 5</span><span class="ln">dispatch cases: 5</span><span class="ln">ToolContinuation kinds: 6</span><span class="ln">RequestReason: 9</span><span class="ln">Terminal.reason: 5</span><span class="ln">ReasonDetail: 16</span><span class="ln">turn stages: 6</span><span class="ln">  168 core/query-turn.ts</span><span class="ln">  116 core/query-terminal.ts</span><span class="ln">   36 core/turn-budget.ts</span><span class="ln">  292 event-bus/state.ts</span><span class="ln">  465 event-bus/conversation-handler.ts</span><span class="ln">  909 event-bus/conversation/model-settled.ts</span><span class="ln">  368 event-bus/conversation/tools-settled.ts</span></code></pre></div>
+<p>改一处试试：把 <code>needsToolSettlement</code> 的两个 <code>length &gt; 0</code> 改成 <code>&amp;&amp;</code>，
+跑一次带工具的对话。
+结果会是：模型发起了 3 个工具调用，只派发了 1 个（中断场景），
+<code>&amp;&amp;</code> 判定为 false，<code>toolsInFlight</code> 不置位，
+<code>onToolSettled</code> 直接 <code>return</code>——查询挂住，不退不进。
+这个 bug 在正常流里看不出来，只在中断时炸。</p>
+<h2 id="sec-12-十二-下一步">十二、下一步</h2>
+<p>本章讲完「谁决定继续还是收工」，但没讲<strong>请求是怎么拼出来的</strong>。
+<code>llm.request</code> 发出去后，<code>llm-handler.ts</code>（296 行）接住它，
+然后由 <code>llm/request-preparation.ts</code>（1,074 行）装配消息、工具清单、系统提示。
+下一章 Q05 拆这条链路：一个 <code>llm.request</code> 到一次真实 HTTP 调用之间，
+到底有几次改写、几层缓存键、几个降级分支。</p>
+<hr>
+<blockquote>
+<p><strong>本章读完你应该能回答</strong>：
+① 收到 <code>llm.settled</code> 后，靠什么判断继续还是收工？
+——<code>toolUseBlocks.length</code>，有工具就必须先结算。
+② 迟到的旧事件为什么不污染新回合？
+——<code>currentRound</code> 比对随机 <code>roundId</code>，第一个 <code>if</code> 就丢弃。
+③ 模型说完最后一句话就算结束吗？
+——不算，Stop 钩子还能塞消息再来一轮（<code>request('stop_hook')</code>）。
+④ 撞上 <code>max_turns</code> 算不算异常？
+——不算，等同正常收工，钩子照跑但改不了终态。
+⑤ <code>turn_setup_failed</code> 和 <code>api_error</code> 怎么分？
+——只看 <code>requestIndex</code> 是否为 0。</p>
+</blockquote>
+
+<div class="pager">
+      <a class="prev" href="q03-query-eventbus.html"><span class="lbl">上一篇</span>86 行入口与事件总线 —— 三个 handler 如何接力</a>
+      <a class="next" href="q05-request-prep.html"><span class="lbl">下一篇</span>一次请求的七步装配 —— 1,132 行里发生了什么</a>
+    </div>
+</main>
+<nav class="toc"><div class="toc-title">本章目录</div><a href="#sec-1-一-回合是什么-queryround-的十个字段" class="">一、回合是什么：QueryRound 的十个字段</a><a href="#sec-2-二-dispatch-五路事件分流" class="">二、dispatch：五路事件分流</a><a href="#sec-3-三-谁写哪个字段-四方的分工" class="">三、谁写哪个字段：四方的分工</a><a href="#sec-4-四-handlellmsettled-两条大路" class="">四、handleLlmSettled：两条大路</a><a href="#sec-5-五-handleresponse-的七道门" class="">五、handleResponse 的七道门</a><a href="#sec-6-六-ontoolsettled-与-aftertools-的耦合" class="">六、onToolSettled 与 afterTools 的耦合</a><a href="#sec-7-七-终态与细节-五个-reason-十六种细节" class="">七、终态与细节：五个 reason，十六种细节</a><a href="#sec-8-八-queryturn-与动态回合预算" class="">八、QueryTurn 与动态回合预算</a><a href="#sec-9-九-工程暗坑" class="">九、工程暗坑</a><a href="#sec-10-十-本章源码索引" class="">十、本章源码索引</a><a href="#sec-11-十一-自己动手验证" class="">十一、自己动手验证</a><a href="#sec-12-十二-下一步" class="">十二、下一步</a></nav>
+</div>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var key = "qw-book-theme";
+  var saved = localStorage.getItem(key);
+  if (saved) root.setAttribute("data-theme", saved);
+  var btn = document.getElementById("theme-toggle");
+  function label() {
+    btn.textContent = root.getAttribute("data-theme") === "dark" ? "浅色" : "深色";
+  }
+  label();
+  btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem(key, next);
+    label();
+  });
+
+  var rail = document.getElementById("progress-rail");
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    rail.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+  if (links.length) {
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+    function mark() {
+      var best = -1;
+      targets.forEach(function (t, i) {
+        if (t && t.getBoundingClientRect().top <= 120) best = i;
+      });
+      links.forEach(function (a, i) { a.classList.toggle("active", i === best); });
+    }
+    document.addEventListener("scroll", mark, { passive: true });
+    mark();
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(
+        function () { return true; },
+        function () { return legacyCopy(text); }
+      );
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function legacyCopy(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  // 代码块复制：双击 HTML 打开时没有 secure context，所以留了 execCommand 退路
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest(".copy");
+    if (!button) return;
+    var lines = button.closest(".code-block").querySelectorAll(".ln");
+    var text = Array.prototype.map.call(lines, function (line) {
+      return line.textContent;
+    }).join("\n"); // 在模板字符串里必须写成 \n，否则产物中字符串字面量跨行、整块脚本语法错误
+    copyText(text).then(function (ok) {
+      button.textContent = ok ? "已复制" : "复制失败";
+      button.classList.toggle("is-done", ok);
+      setTimeout(function () {
+        button.textContent = "复制";
+        button.classList.remove("is-done");
+      }, 1200);
+    });
+  });
+})();
+</script>
+</body>
+</html>

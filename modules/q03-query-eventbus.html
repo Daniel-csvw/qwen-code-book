@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>86 行入口与事件总线 —— 三个 handler 如何接力 · Qwen Code 源码级教程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body class="is-module">
+<div class="progress-rail" id="progress-rail"></div>
+<header class="topbar">
+  <a class="brand" href="../index.html">Qwen <b>Code</b> 源码级教程</a>
+  <span class="spacer"></span>
+  <button id="theme-toggle" type="button">深色</button>
+</header>
+<div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
+                <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
+                <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="active">
+                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
+                <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
+                <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
+                <span class="code">Q07</span><span>工具与 MCP —— 45 个内置工具如何接进同一张表</span></a><a href="q08-permission-hooks.html" class="">
+                <span class="code">Q08</span><span>权限与钩子 —— 两道闸门如何拦住一次工具调用</span></a></div><div class="part"><div class="part-title">Part C · 上下文与资产</div><a href="q09-context-engineering.html" class="">
+                <span class="code">Q09</span><span>上下文工程 —— 三层记忆与并发飞行</span></a><a href="q10-compaction.html" class="">
+                <span class="code">Q10</span><span>记忆压缩 —— 14 种失败原因与一道熔断</span></a><a href="q11-skills-plugins.html" class="">
+                <span class="code">Q11</span><span>技能与插件 —— 能执行 shell 的提示词</span></a><a href="q12-agents-workflow.html" class="">
+                <span class="code">Q12</span><span>Agent 与 Workflow —— 六种终止模式与四个内置代理</span></a></div><div class="part"><div class="part-title">Part D · 使用侧</div><a href="q13-frameworks.html" class="">
+                <span class="code">Q13</span><span>ACP 与 headless —— 内核怎么接进编辑器与脚本</span></a><a href="q14-ink-tui.html" class="">
+                <span class="code">Q14</span><span>TUI 与 ink —— 为什么要把渲染库 fork 进来</span></a></div><div class="part"><div class="part-title">Part E · 实战拓展</div><a href="q15-custom-tool.html" class="">
+                <span class="code">Q15</span><span>实战一：写一个自定义工具</span></a><a href="q16-hooks.html" class="">
+                <span class="code">Q16</span><span>实战二：写一个钩子——三道拦截</span></a><a href="q17-skills.html" class="">
+                <span class="code">Q17</span><span>实战三：写一个技能——发版一条龙</span></a><a href="q18-mcp.html" class="">
+                <span class="code">Q18</span><span>实战四：写一个 MCP 服务器</span></a><a href="q19-headless.html" class="">
+                <span class="code">Q19</span><span>实战五：headless 流水线</span></a></div><div class="part"><div class="part-title">附录</div><a href="q21-appendix-a.html" class="">
+                <span class="code">附录 A</span><span>附录 A · 按问题查</span></a><a href="q20-appendix-b.html" class="">
+                <span class="code">附录 B</span><span>附录 B · 源码坐标总表</span></a></div></aside>
+<div class="main">
+<main class="prose">
+<header class="module-header">
+      <div class="module-eyebrow">Q03</div>
+      <h1>86 行入口与事件总线 —— 三个 handler 如何接力</h1>
+      <div class="module-meta">3,016 字 · 259 行代码 · 17 块 · 约 15 分钟</div>
+    </header>
+    <p>一个 Agent 的循环可以写成 <code>while (true) { 模型; 工具; }</code>——Pi 教程里那个 960 行的
+<code>agent-loop.ts</code> 就是这么干的，直白、好读、一眼看穿。</p>
+<p>Qwen Code 1.0 Preview 选了反方向。它的 <code>agent-loop.ts</code> <strong>只有 86 行</strong>，其中真正的
+<code>query()</code> 函数 35 行，最后一行是 <code>return createQueryStream(options, initialModel)</code>——
+把活全推给了事件总线。</p>
+<p>这不是偷懒。这是把「谁在什么时候做什么」从<strong>调用栈</strong>搬到了<strong>事件流</strong>。</p>
+<blockquote>
+<p>本章读的是 <code>packages/core/src/event-bus/</code> 下的五个文件（共 1,809 行）与
+<code>packages/core/src/core/agent-loop.ts</code>（86 行）。读完你应该能回答：
+一次对话里，谁决定了「再问一次模型」？为什么三个 handler 不会互相堵死？
+为什么取消能立刻生效？</p>
+</blockquote>
+<h2 id="sec-1-一-入口只有-35-行">一、入口只有 35 行</h2>
+<p>先看完整函数。这是全仓库最重要的 35 行：</p>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/core/agent-loop.ts:51-85 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">function</span> <span class="tok-fn">query</span>(</span><span class="ln">  options: QueryParams,</span><span class="ln">): AsyncGenerator&lt;QueryEvent, Terminal&gt; {</span><span class="ln">  <span class="tok-kw">if</span> (options.compactSelection &amp;&amp; options.modelPurpose !== <span class="tok-str">'compact'</span>) {</span><span class="ln">    <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-fn">Error</span>(<span class="tok-str">'compactSelection is only supported for compact queries'</span>);</span><span class="ln">  }</span><span class="ln">  <span class="tok-kw">const</span> agentDefaults =</span><span class="ln">    options.config &amp;&amp;</span><span class="ln">    options.isSubagent &amp;&amp;</span><span class="ln">    (options.modelPurpose === <span class="tok-kw">undefined</span> ||</span><span class="ln">      options.modelPurpose === <span class="tok-str">'task'</span> ||</span><span class="ln">      options.modelPurpose === <span class="tok-str">'fork'</span>)</span><span class="ln">      ? <span class="tok-fn">readAgentSelectionDefaults</span>(</span><span class="ln">          options.config,</span><span class="ln">          {</span><span class="ln">            agentId: options.agentId ?? options.promptId,</span><span class="ln">            agentType: options.agentType,</span><span class="ln">          },</span><span class="ln">          options.modelPurpose,</span><span class="ln">        )</span><span class="ln">      : <span class="tok-kw">undefined</span>;</span><span class="ln">  <span class="tok-com">// Before selection, use the existing request intent for attribution.</span></span><span class="ln">  <span class="tok-com">// Inference and post-selection diagnostics use the Provider's</span></span><span class="ln">  <span class="tok-com">// final selection.</span></span><span class="ln">  <span class="tok-kw">const</span> initialModel =</span><span class="ln">    (options.modelPurpose === <span class="tok-str">'fork'</span> ||</span><span class="ln">      options.modelPurpose === <span class="tok-str">'side_question'</span></span><span class="ln">      ? options.parentSelection?.model.key</span><span class="ln">      : <span class="tok-kw">undefined</span>) ??</span><span class="ln">    options.compactSelection?.model.key ??</span><span class="ln">    options.querySelection?.key ??</span><span class="ln">    agentDefaults?.key ??</span><span class="ln">    options.parentSelection?.model.key ??</span><span class="ln">    options.config?.<span class="tok-fn">getModel</span>() ??</span><span class="ln">    <span class="tok-str">''</span>;</span><span class="ln">  <span class="tok-kw">return</span> <span class="tok-fn">createQueryStream</span>(options, initialModel);</span><span class="ln">}</span></code></pre></div>
+<p>它干了两件事，都在「进入事件流之前」：</p>
+<ol>
+<li><strong>参数校验</strong>（:54-56）：<code>compactSelection</code> 只能配 <code>modelPurpose: 'compact'</code>。
+这是个断言，防的是调用方把「压缩用的模型选择」塞进普通查询。</li>
+<li><strong>算出初始模型</strong>（:72-83）：一串 <code>??</code> 兜底，优先级从高到低是
+fork/side_question 继承父选择 → 压缩选择 → 显式 querySelection →
+Agent 默认 → 父选择 → config 兜底 → 空串。</li>
+</ol>
+<p>算完之后，<code>query()</code> 就退场了。它不持有状态、不循环、不碰工具。</p>
+<p>函数签名值得单独看一眼：<code>AsyncGenerator&lt;QueryEvent, Terminal&gt;</code>。它<strong>产出</strong>事件流，
+<strong>返回</strong>一个 <code>Terminal</code>。调用方用 <code>for await</code> 消费事件，循环结束后拿到终止原因。
+这是「一个 query 就是一段可迭代的事件序列」的直白表达。</p>
+<h3 id="sec-2-文件头自己写的定位">文件头自己写的定位</h3>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/core/agent-loop.ts:8-15 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">/**</span></span><span class="ln"><span class="tok-com"> * query — one prompt and the tool calls, hooks and continuations it causes.</span></span><span class="ln"><span class="tok-com"> *</span></span><span class="ln"><span class="tok-com"> * Execution is event driven: a session event bus routes events between the</span></span><span class="ln"><span class="tok-com"> * Conversation, Llm and Tool handlers (see ../event-bus/), and query() only</span></span><span class="ln"><span class="tok-com"> * listens. It yields the durable messages and runtime events of the query and</span></span><span class="ln"><span class="tok-com"> * returns its Terminal. Prediction forks take their own single-response path.</span></span><span class="ln"><span class="tok-com"> */</span></span></code></pre></div>
+<p><code>query() only listens</code>——四个字概括了架构选择。真正干活的是三个 handler，
+<code>query()</code> 只是把它们的产出接成一条调用方看得见的流。</p>
+<h2 id="sec-3-二-总线的-148-行">二、总线的 148 行</h2>
+<p><code>event-bus/bus.ts</code> 全文 148 行，核心是两个方法：<code>subscribe</code> 与 <code>publish</code>。
+类注释交代了契约（:39-45）：</p>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/bus.ts:39-48 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-com">/**</span></span><span class="ln"><span class="tok-com"> * Delivery only: routes by queryId, never touches query state.</span></span><span class="ln"><span class="tok-com"> *</span></span><span class="ln"><span class="tok-com"> * Events for one subscriber and one query are delivered serially in publish</span></span><span class="ln"><span class="tok-com"> * order; different queries never block each other. A listener that throws or</span></span><span class="ln"><span class="tok-com"> * rejects is reported as `handler.failed`.</span></span><span class="ln"><span class="tok-com"> */</span></span><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">class</span> QueryEventBus {</span><span class="ln">  <span class="tok-kw">private</span> <span class="tok-kw">readonly</span> subscriptions = <span class="tok-kw">new</span> Set&lt;Subscription&gt;();</span><span class="ln">  <span class="tok-kw">private</span> <span class="tok-kw">readonly</span> chains = <span class="tok-kw">new</span> Map&lt;<span class="tok-kw">string</span>, Promise&lt;<span class="tok-kw">void</span>&gt;&gt;();</span></code></pre></div>
+<p>三句话，三个硬约束：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>约束</th>
+<th>含义</th>
+<th>为什么重要</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>只做投递</strong></td>
+<td>按 <code>queryId</code> 路由，不碰查询状态</td>
+<td>总线不会成为第二个真相源</td>
+</tr>
+<tr>
+<td><strong>同订阅同查询串行</strong></td>
+<td>一条订阅的同一 query 按 publish 顺序投递</td>
+<td>事件顺序确定，handler 不用自己排</td>
+</tr>
+<tr>
+<td><strong>不同查询互不阻塞</strong></td>
+<td>另一个 query 的事件不会被卡住</td>
+<td>子 Agent 并发不会拖慢主查询</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="sec-4-订阅-一个回调-一份退订">订阅：一个回调 + 一份退订</h3>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/bus.ts:50-67 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">  <span class="tok-fn">subscribe</span>(</span><span class="ln">    source: HandlerName,</span><span class="ln">    types: <span class="tok-kw">readonly</span> QueryBusEventType[],</span><span class="ln">    listener: Listener,</span><span class="ln">    options: SubscribeOptions = {},</span><span class="ln">  ): () =&gt; <span class="tok-kw">void</span> {</span><span class="ln">    <span class="tok-kw">const</span> subscription: Subscription = {</span><span class="ln">      name: options.name ?? source,</span><span class="ln">      source,</span><span class="ln">      types: <span class="tok-kw">new</span> <span class="tok-fn">Set</span>(types),</span><span class="ln">      queryId: options.queryId,</span><span class="ln">      listener,</span><span class="ln">    };</span><span class="ln">    <span class="tok-kw">this</span>.subscriptions.<span class="tok-fn">add</span>(subscription);</span><span class="ln">    <span class="tok-kw">return</span> () =&gt; {</span><span class="ln">      <span class="tok-kw">this</span>.subscriptions.<span class="tok-kw">delete</span>(subscription);</span><span class="ln">    };</span><span class="ln">  }</span></code></pre></div>
+<p>返回的是<strong>退订函数</strong>而不是订阅句柄。这个选择让清理变得不可能出错：
+<code>const off = bus.subscribe(...)</code> 然后 <code>off()</code>，没有 id 查找，没有泄漏。</p>
+<p><code>options.queryId</code> 是个关键的可选过滤：给了就只收这个 query 的事件。
+<code>queryName</code> 默认取 <code>source</code>（handler 名），但可以覆盖——
+<code>QueryListener</code> 就用了 <code>query:${queryId}</code> 作为名字（后文会看到）。</p>
+<h3 id="sec-5-发布-三道过滤-一次投递">发布：三道过滤 + 一次投递</h3>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/bus.ts:69-84 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">  publish&lt;T <span class="tok-kw">extends</span> QueryBusEventType&gt;(input: PublishInput&lt;T&gt;): <span class="tok-kw">void</span> {</span><span class="ln">    <span class="tok-kw">const</span> event = {</span><span class="ln">      ...input,</span><span class="ln">      eventId: input.eventId ?? <span class="tok-fn">randomUUID</span>(),</span><span class="ln">    } <span class="tok-kw">as</span> AnyBusEvent;</span><span class="ln">    <span class="tok-kw">for</span> (<span class="tok-kw">const</span> subscription <span class="tok-kw">of</span> <span class="tok-kw">this</span>.subscriptions) {</span><span class="ln">      <span class="tok-kw">if</span> (!subscription.types.<span class="tok-fn">has</span>(event.<span class="tok-kw">type</span>)) <span class="tok-kw">continue</span>;</span><span class="ln">      <span class="tok-kw">if</span> (</span><span class="ln">        subscription.queryId !== <span class="tok-kw">undefined</span> &amp;&amp;</span><span class="ln">        subscription.queryId !== event.queryId</span><span class="ln">      ) {</span><span class="ln">        <span class="tok-kw">continue</span>;</span><span class="ln">      }</span><span class="ln">      <span class="tok-kw">this</span>.<span class="tok-fn">deliver</span>(subscription, event);</span><span class="ln">    }</span><span class="ln">  }</span></code></pre></div>
+<p><code>publish</code> 是<strong>同步</strong>的——它返回 <code>void</code>，不等任何 handler 跑完。
+投递本身是异步的，但调用方不被阻塞。这是事件驱动的关键：
+发布者不知道也不关心有几个订阅者、它们要跑多久。</p>
+<p>过滤只做两件事：<strong>类型匹配</strong>、<strong>queryId 匹配</strong>。没有优先级，没有中间件链，
+没有「先注册先执行」以外的语义。少即是多。</p>
+<h3 id="sec-6-投递-用-promise-链排队">投递：用 Promise 链排队</h3>
+<p>这是全文件最精巧的 15 行：</p>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/bus.ts:114-128 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">  <span class="tok-kw">private</span> <span class="tok-fn">deliver</span>(subscription: Subscription, event: AnyBusEvent): <span class="tok-kw">void</span> {</span><span class="ln">    <span class="tok-kw">const</span> key = <span class="tok-str">`${subscription.name}\u0000${event.queryId}`</span>;</span><span class="ln">    <span class="tok-kw">const</span> previous = <span class="tok-kw">this</span>.chains.<span class="tok-kw">get</span>(key) ?? Promise.<span class="tok-fn">resolve</span>();</span><span class="ln">    <span class="tok-kw">const</span> next = previous.<span class="tok-fn">then</span>(<span class="tok-kw">async</span> () =&gt; {</span><span class="ln">      <span class="tok-kw">try</span> {</span><span class="ln">        <span class="tok-kw">await</span> subscription.<span class="tok-fn">listener</span>(event);</span><span class="ln">      } <span class="tok-kw">catch</span> (error) {</span><span class="ln">        <span class="tok-kw">this</span>.<span class="tok-fn">reportFailure</span>(subscription.source, event, error);</span><span class="ln">      }</span><span class="ln">    });</span><span class="ln">    <span class="tok-kw">this</span>.chains.<span class="tok-kw">set</span>(key, next);</span><span class="ln">    <span class="tok-kw">void</span> next.<span class="tok-fn">then</span>(() =&gt; {</span><span class="ln">      <span class="tok-kw">if</span> (<span class="tok-kw">this</span>.chains.<span class="tok-kw">get</span>(key) === next) <span class="tok-kw">this</span>.chains.<span class="tok-kw">delete</span>(key);</span><span class="ln">    });</span><span class="ln">  }</span></code></pre></div>
+<p>逐行拆：</p>
+<ul>
+<li><code>key = name + \u0000 + queryId</code>：用 NUL 字符分隔，避免名字里含分隔符时撞车。
+一个订阅 + 一个查询 = 一条独立的串行链。</li>
+<li><code>previous = chains.get(key) ?? Promise.resolve()</code>：取出这条链上一次的尾巴。</li>
+<li><code>next = previous.then(...)</code>：把本次投递<strong>接到尾巴后面</strong>。
+<code>@</code> 于是同一 key 的事件严格按 publish 顺序执行，不需要锁、不需要队列数据结构。</li>
+<li><code>chains.set(key, next)</code>：更新尾巴。</li>
+<li>尾部清理：只有当自己仍是尾巴时才删，避免误删后来者的链。</li>
+</ul>
+<p>这三行合起来实现了「每个 key 一条串行队列，不同 key 并行」。用的是 Promise 链，
+不是 <code>async</code> 队列，也不是 Mutex——<strong>零依赖、零锁</strong>。</p>
+<h3 id="sec-7-失败不吞-转成事件">失败不吞，转成事件</h3>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/bus.ts:86-112 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">  <span class="tok-com">/** Report a failure of work a listener started but did not await. */</span></span><span class="ln">  <span class="tok-fn">reportFailure</span>(</span><span class="ln">    source: HandlerName,</span><span class="ln">    event: AnyBusEvent,</span><span class="ln">    error: <span class="tok-kw">unknown</span>,</span><span class="ln">  ): <span class="tok-kw">void</span> {</span><span class="ln">    <span class="tok-kw">if</span> (event.<span class="tok-kw">type</span> === <span class="tok-str">'handler.failed'</span>) {</span><span class="ln">      runLogger.<span class="tok-fn">warn</span>(</span><span class="ln">        <span class="tok-str">`[QueryEventBus] ${source} failed while handling handler.failed:`</span>,</span><span class="ln">        error,</span><span class="ln">      );</span><span class="ln">      <span class="tok-kw">return</span>;</span><span class="ln">    }</span><span class="ln">    <span class="tok-kw">this</span>.<span class="tok-fn">publish</span>({</span><span class="ln">      <span class="tok-kw">type</span>: <span class="tok-str">'handler.failed'</span>,</span><span class="ln">      sessionId: event.sessionId,</span><span class="ln">      queryId: event.queryId,</span><span class="ln">      parentQueryId: event.parentQueryId,</span><span class="ln">      roundId: event.roundId,</span><span class="ln">      data: {</span><span class="ln">        source,</span><span class="ln">        eventType: event.<span class="tok-kw">type</span>,</span><span class="ln">        roundId: event.roundId,</span><span class="ln">        error,</span><span class="ln">      },</span><span class="ln">    });</span><span class="ln">  }</span></code></pre></div>
+<p>handler 抛异常不会让进程崩，也不会静默消失——它变成一个 <code>handler.failed</code> 事件，
+带着「谁失败了、在处理什么事件时失败、错误是什么」，重新进入总线。</p>
+<p>递归保护（:92-98）：如果失败的事件本身就是 <code>handler.failed</code>，只打日志不再发布，
+否则会无限套娃。</p>
+<p>这个设计让<strong>失败也是一等公民</strong>：上层可以订阅 <code>handler.failed</code> 做降级、上报、
+或像 <code>QueryListener</code> 那样把 conversation 的失败转成取消（下节会看到）。</p>
+<h2 id="sec-8-三-十个事件-四个角色">三、十个事件，四个角色</h2>
+<p><code>events.ts</code> 是总线的类型底座。<code>QueryBusEventMap</code> 定义了十个事件类型（:74-95）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>事件</th>
+<th>发出者</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>query.submitted</code></td>
+<td>Query</td>
+<td>查询已提交</td>
+</tr>
+<tr>
+<td><code>query.output</code></td>
+<td>Query</td>
+<td>向上吐一个 <code>QueryEvent</code></td>
+</tr>
+<tr>
+<td><code>query.cancelled</code></td>
+<td>Query</td>
+<td>取消，带原因</td>
+</tr>
+<tr>
+<td><code>query.finished</code></td>
+<td>Query</td>
+<td>结束，带 <code>Terminal.reason</code></td>
+</tr>
+<tr>
+<td><code>llm.request</code></td>
+<td>Llm</td>
+<td>请求模型，带「为什么再问一次」</td>
+</tr>
+<tr>
+<td><code>llm.tool_use</code></td>
+<td>Llm</td>
+<td>模型返回了一个工具调用</td>
+</tr>
+<tr>
+<td><code>llm.settled</code></td>
+<td>Llm</td>
+<td>本轮模型请求结束</td>
+</tr>
+<tr>
+<td><code>tool.cancel</code></td>
+<td>Tool</td>
+<td>取消工具执行</td>
+</tr>
+<tr>
+<td><code>tool.settled</code></td>
+<td>Tool</td>
+<td>一批工具执行结束</td>
+</tr>
+<tr>
+<td><code>handler.failed</code></td>
+<td>任意</td>
+<td>handler 抛错</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>HandlerName</code> 只有四个值（:48）：<code>'conversation' | 'llm' | 'tool' | 'query'</code>。
+<strong>注意：没有 <code>conversation.submitted</code> 这类事件</strong>——conversation 的入总是别人的出。
+它是链条的起点，由 <code>runtime.ts</code> 直接拉起，不通过总线自触发。</p>
+<h3 id="sec-9-llm-request-带的是-为什么">llm.request 带的是「为什么」</h3>
+<p>九个 <code>RequestReason</code>（:12-21）里藏着整个循环的全部出路：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">initial           首轮</span><span class="ln"> tool_results      上轮有工具结果要回传</span><span class="ln">escalation        模型输出被判不够，提预算重问</span><span class="ln"> stop_hook         某个 stop 钩子要求续话</span><span class="ln">truncation        输出被截断，需要续写</span><span class="ln"> malformed         模型 JSON 吐错，要求重吐</span><span class="ln">ptl               prompt too long，触发压缩后重问</span><span class="ln">reactive_compact  反应式压缩完成后重问</span><span class="ln">stream_recovery   流中断，恢复后重问</span></code></pre></div>
+<p>这就是「什么时候还要再问一次模型」的<strong>穷举清单</strong>。
+Pi 的 <code>agent-loop.ts</code> 用 <code>while</code> 循环里的分支表达同样的东西；
+Qwen 把它变成事件上的一个枚举字段。信息量一样，但<strong>住的地方变了</strong>：
+前者住在控制流里，后者住在数据里。数据可以被记录、被断言、被订阅者按需处理。</p>
+<h3 id="sec-10-事件信封不可省">事件信封不可省</h3>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/events.ts:99-110 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">interface</span> BusEvent&lt;T <span class="tok-kw">extends</span> QueryBusEventType = QueryBusEventType&gt; {</span><span class="ln">  <span class="tok-com">/** Dedup key. */</span></span><span class="ln">  eventId: <span class="tok-kw">string</span>;</span><span class="ln">  <span class="tok-kw">type</span>: T;</span><span class="ln">  <span class="tok-com">/** Attribution only; never a routing key. */</span></span><span class="ln">  sessionId: <span class="tok-kw">string</span>;</span><span class="ln">  <span class="tok-com">/** Routing key. */</span></span><span class="ln">  queryId: <span class="tok-kw">string</span>;</span><span class="ln">  parentQueryId?: <span class="tok-kw">string</span>;</span><span class="ln">  roundId?: <span class="tok-kw">string</span>;</span><span class="ln">  data: QueryBusEventMap[T];</span><span class="ln">}</span></code></pre></div>
+<p>四个字段各司其职，注释把边界钉得很死：</p>
+<ul>
+<li><code>eventId</code>：去重键。<code>publish</code> 里 <code>randomUUID()</code> 自动生成（bus.ts:72）。</li>
+<li><code>sessionId</code>：<strong>仅用于归因，永不作为路由键</strong>。这是有意的——一个会话可以跑多个查询
+（子 Agent、side question），按 session 路由会让它们互相干扰。</li>
+<li><code>queryId</code>：<strong>唯一的真路由键</strong>。</li>
+<li><code>parentQueryId</code>：子查询指回父查询，用于追链。</li>
+</ul>
+<p>把「归因」和「路由」拆成两件事，是这套总线能支持嵌套查询的前提。</p>
+<h2 id="sec-11-四-query-如何-只是听">四、query() 如何「只是听」</h2>
+<p><code>QueryListener</code> 是 <code>query-stream.ts</code> 里的一个类（:48-90），它把总线上的噪声
+收敛成一条调用方可消费的异步流。</p>
+<h3 id="sec-12-订阅三件事-别的一概不管">订阅三件事，别的一概不管</h3>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/query-stream.ts:66-90 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">    <span class="tok-kw">this</span>.unsubscribe = bus.<span class="tok-fn">subscribe</span>(</span><span class="ln">      <span class="tok-str">'query'</span>,</span><span class="ln">      [<span class="tok-str">'query.output'</span>, <span class="tok-str">'query.finished'</span>, <span class="tok-str">'handler.failed'</span>],</span><span class="ln">      (event) =&gt; {</span><span class="ln">        <span class="tok-kw">if</span> (event.<span class="tok-kw">type</span> === <span class="tok-str">'query.output'</span>) {</span><span class="ln">          <span class="tok-kw">if</span> (!<span class="tok-kw">this</span>.closed &amp;&amp; !<span class="tok-kw">this</span>.finished) {</span><span class="ln">            <span class="tok-kw">this</span>.buffer.<span class="tok-fn">push</span>(event.data.event);</span><span class="ln">            <span class="tok-kw">this</span>.<span class="tok-fn">notify</span>();</span><span class="ln">          }</span><span class="ln">          <span class="tok-kw">return</span>;</span><span class="ln">        }</span><span class="ln">        <span class="tok-kw">if</span> (event.<span class="tok-kw">type</span> === <span class="tok-str">'query.finished'</span>) {</span><span class="ln">          <span class="tok-kw">this</span>.<span class="tok-fn">markFinished</span>();</span><span class="ln">          <span class="tok-kw">return</span>;</span><span class="ln">        }</span><span class="ln">        <span class="tok-kw">if</span> (event.<span class="tok-kw">type</span> === <span class="tok-str">'handler.failed'</span>) {</span><span class="ln">          <span class="tok-kw">if</span> (event.data.source !== <span class="tok-str">'conversation'</span>) <span class="tok-kw">return</span>;</span><span class="ln">          <span class="tok-kw">this</span>.conversationFailure ??= { error: event.data.error };</span><span class="ln">          <span class="tok-kw">this</span>.<span class="tok-fn">cancel</span>(<span class="tok-str">'conversation_failed'</span>);</span><span class="ln">          <span class="tok-kw">void</span> <span class="tok-kw">this</span>.<span class="tok-fn">capWait</span>().<span class="tok-fn">then</span>(() =&gt; <span class="tok-kw">this</span>.<span class="tok-fn">markFinished</span>());</span><span class="ln">        }</span><span class="ln">      },</span><span class="ln">      { name: <span class="tok-str">`query:${queryId}`</span>, queryId },</span><span class="ln">    );</span></code></pre></div>
+<p>三路分流，各有分寸：</p>
+<ol>
+<li><strong><code>query.output</code></strong> → 进缓冲区 + 唤醒等待者。两个 <code>if</code> 条件是保护：
+消费者已关闭或流已结束时，后续输出直接丢弃，不再堆积。</li>
+<li><strong><code>query.finished</code></strong> → 标记结束，唤醒所有等待者退出循环。</li>
+<li><strong><code>handler.failed</code></strong> → <strong>只认 <code>conversation</code> 的失败</strong>，其他 handler 的失败
+各自消化，不惊动查询生命周期。conversation 挂了就意味着没人在推进对话，
+这时才转成 <code>query.cancelled</code>（reason: <code>conversation_failed</code>）。</li>
+</ol>
+<p><code>??=</code> 和 <code>capWait()</code> 两个细节：前者保证只记第一个失败（后续失败不覆盖根因）；
+后者给结束加一个 10 秒上限（<code>CLOSE_SETTLEMENT_CAP_MS</code>），防止 handler 卡死时
+查询永远收不了尾。</p>
+<h3 id="sec-13-取消-先响信号-再发事件">取消：先响信号，再发事件</h3>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/query-stream.ts:115-126 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">  <span class="tok-fn">cancel</span>(reason: QueryCancelReason, signalReason?: <span class="tok-kw">unknown</span>): <span class="tok-kw">void</span> {</span><span class="ln">    <span class="tok-kw">if</span> (<span class="tok-kw">this</span>.cancelled) <span class="tok-kw">return</span>;</span><span class="ln">    <span class="tok-kw">this</span>.cancelled = <span class="tok-kw">true</span>;</span><span class="ln">    <span class="tok-com">// Handlers read the shared signal; the event tells them it happened.</span></span><span class="ln">    <span class="tok-kw">this</span>.state.control.abort.<span class="tok-fn">abort</span>(signalReason);</span><span class="ln">    <span class="tok-kw">this</span>.bus.<span class="tok-fn">publish</span>(</span><span class="ln">      <span class="tok-fn">createBusEvent</span>(<span class="tok-str">'query.cancelled'</span>, <span class="tok-kw">this</span>.state.input, {</span><span class="ln">        reason,</span><span class="ln">        ...(signalReason !== <span class="tok-kw">undefined</span> ? { signalReason } : {}),</span><span class="ln">      }),</span><span class="ln">    );</span><span class="ln">  }</span></code></pre></div>
+<p>注释一行抵千言：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">Handlers read the shared signal; the event tells them it happened.</span></code></pre></div>
+<p><strong>取消是双通道的</strong>：<code>AbortSignal</code> 负责「让正在等的 IO 立刻断」，
+事件负责「让 handler 知道发生了什么、为什么」。二者都不可替代：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>只发事件</th>
+<th>只 abort 信号</th>
+<th>两者都要</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型请求还在飞，等不及</td>
+<td>handler 分不清是用户取消还是内部出错</td>
+<td>信号先断 IO，事件留痕</td>
+</tr>
+</tbody>
+</table></div>
+<p>这条「信号 + 事件」的双通道，是本章最值得记住的一处设计。</p>
+<h3 id="sec-14-四个取消源">四个取消源</h3>
+<p><code>QueryCancelReason</code> 有四个值（events.ts:23-27），对应四条不同的入口路径：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>原因</th>
+<th>谁触发的</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>abort</code></td>
+<td>调用方发 <code>abort</code></td>
+</tr>
+<tr>
+<td><code>consumer_return</code></td>
+<td>消费者提前 <code>return</code>（<code>for await</code> 里 break）</td>
+</tr>
+<tr>
+<td><code>consumer_throw</code></td>
+<td>消费者的循环体抛错</td>
+</tr>
+<tr>
+<td><code>conversation_failed</code></td>
+<td>conversation handler 挂了</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>close()</code> 专门处理前两种消费者侧退出（:129-135）：</p>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/query-stream.ts:128-135 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">  <span class="tok-com">/** Consumer closed: cancel at once and drop what it will never read. */</span></span><span class="ln">  <span class="tok-fn">close</span>(reason: QueryCancelReason): <span class="tok-kw">void</span> {</span><span class="ln">    <span class="tok-kw">if</span> (<span class="tok-kw">this</span>.closed) <span class="tok-kw">return</span>;</span><span class="ln">    <span class="tok-kw">this</span>.closed = <span class="tok-kw">true</span>;</span><span class="ln">    <span class="tok-kw">this</span>.buffer.length = <span class="tok-num">0</span>;</span><span class="ln">    <span class="tok-kw">if</span> (!<span class="tok-kw">this</span>.finished) <span class="tok-kw">this</span>.<span class="tok-fn">cancel</span>(reason);</span><span class="ln">    <span class="tok-kw">this</span>.<span class="tok-fn">notify</span>();</span><span class="ln">  }</span></code></pre></div>
+<p><code>this.buffer.length = 0</code> ——消费者已经不要了，缓冲区里的事件永远不会被读，
+当场扔掉。这个细节区分了「暂停」和「放弃」。</p>
+<h2 id="sec-15-五-三个-handler-的接力表">五、三个 handler 的接力表</h2>
+<p><code>runtime.ts</code> 只有 36 行（:20-35），把三个 handler 装到一条总线上：</p>
+<p>&lt;!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/runtime.ts:20-35 --&gt;</p>
+<div class="code-block" data-lang="ts">
+<div class="code-head"><span class="lang">ts</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">export</span> <span class="tok-kw">function</span> <span class="tok-fn">createQueryEventBus</span>(): QueryEventRuntime {</span><span class="ln">  <span class="tok-kw">const</span> bus = <span class="tok-kw">new</span> <span class="tok-fn">QueryEventBus</span>();</span><span class="ln">  <span class="tok-kw">const</span> store = <span class="tok-fn">createQueryStateStore</span>();</span><span class="ln">  <span class="tok-kw">const</span> unsubscribe = [</span><span class="ln">    <span class="tok-kw">new</span> <span class="tok-fn">ConversationHandler</span>(bus, store).<span class="tok-fn">register</span>(),</span><span class="ln">    <span class="tok-kw">new</span> <span class="tok-fn">LlmHandler</span>(bus, store).<span class="tok-fn">register</span>(),</span><span class="ln">    <span class="tok-kw">new</span> <span class="tok-fn">ToolHandler</span>(bus, store).<span class="tok-fn">register</span>(),</span><span class="ln">  ];</span><span class="ln">  <span class="tok-kw">return</span> {</span><span class="ln">    bus,</span><span class="ln">    store,</span><span class="ln">    dispose: () =&gt; {</span><span class="ln">      <span class="tok-kw">for</span> (<span class="tok-kw">const</span> off <span class="tok-kw">of</span> unsubscribe) <span class="tok-fn">off</span>();</span><span class="ln">    },</span><span class="ln">  };</span><span class="ln">}</span></code></pre></div>
+<p>三个 handler 共享两个东西：<code>bus</code>（通信）与 <code>store</code>（状态）。它们互不引用——
+ConversationHandler 的构造函数里没有 LlmHandler，反之亦然。
+<strong>它们只知道事件名</strong>。</p>
+<p>把三个 <code>register()</code> 里的订阅表摊开，接力关系一目了然：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Handler</th>
+<th>订阅</th>
+<th>发布</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Conversation</strong></td>
+<td><code>query.submitted</code>、<code>llm.settled</code>、<code>tool.settled</code>、<code>query.cancelled</code>、<code>handler.failed</code></td>
+<td><code>llm.request</code>、<code>query.output</code>、<code>query.finished</code></td>
+</tr>
+<tr>
+<td><strong>Llm</strong></td>
+<td><code>llm.request</code></td>
+<td><code>llm.tool_use</code>、<code>llm.settled</code></td>
+</tr>
+<tr>
+<td><strong>Tool</strong></td>
+<td><code>llm.tool_use</code>、<code>llm.settled</code>、<code>tool.cancel</code>、<code>query.cancelled</code>、<code>handler.failed</code></td>
+<td><code>tool.settled</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="sec-16-读这张表的三个发现">读这张表的三个发现</h3>
+<p><strong>发现一：Conversation 是唯一的决策者。</strong>
+它收到 <code>llm.settled</code> 与 <code>tool.settled</code> 后，决定下一步是「再问模型」还是「结束」。
+证据在 <code>RequestReason</code> 的九个值里——那些全是 Conversation 的决策结果。
+Llm 和 Tool 只是执行，从不决定要不要继续。</p>
+<p><strong>发现二：Llm 只订一个事件。</strong>
+<code>bus.subscribe('llm', ['llm.request'], ...)</code> ——就这一行。
+Llm 不需要知道上一轮发生了什么、工具跑得怎么样，它只需要知道「去问模型」。
+<strong>这就是把「为什么问」和「怎么问」拆开的收益。</strong></p>
+<p><strong>发现三：Tool 同时盯两个终结信号。</strong>
+<code>llm.settled</code>（本轮模型结束，工具可以开跑）+ <code>llm.tool_use</code>（单个工具调用）。
+而 <code>tool.cancel</code>、<code>query.cancelled</code>、<code>handler.failed</code> 三个是它的取消与异常通道。</p>
+<h3 id="sec-17-一轮的完整路径">一轮的完整路径</h3>
+<p>把上面的表画成时序，一次「用户提问 → 模型调工具 → 再问模型 → 答完」的旅程：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"> 调用方                Conversation           Llm              Tool</span><span class="ln">   │                        │                 │                 │</span><span class="ln">   │── query() ────────────&gt;│                 │                 │</span><span class="ln">   │                        │                 │                 │</span><span class="ln">   │        ① query.submitted│                 │                 │</span><span class="ln">   │                        │──② llm.request ─&gt;│                 │</span><span class="ln">   │                        │   (initial)     │                 │</span><span class="ln">   │                        │                 │  跑模型...      │</span><span class="ln">   │&lt;──③ query.output ──────│                 │                 │</span><span class="ln">   │    (流式片段)          │                 │                 │</span><span class="ln">   │                        │                 │── llm.tool_use ─&gt;│</span><span class="ln">   │                        │                 │                 │  开跑</span><span class="ln">   │                        │                 │── llm.settled ──&gt;│</span><span class="ln">   │                        │&lt;──── ④ tool.settled ───────────────│</span><span class="ln">   │                        │                 │                 │</span><span class="ln">   │                        │──⑤ llm.request ─&gt;│                 │</span><span class="ln">   │                        │  (tool_results)  │                 │</span><span class="ln">   │                        │                 │  再跑模型...    │</span><span class="ln">   │                        │&lt;─── llm.settled ──────────────────│</span><span class="ln">   │                        │                 │                 │</span><span class="ln">   │&lt;──⑥ query.finished ───│                 │                 │</span><span class="ln">   │                        │                 │                 │</span></code></pre></div>
+<p>六步，两个环：</p>
+<ul>
+<li><strong>①→②</strong>：首轮触发。Conversation 收到提交，立刻请 Llm 跑一轮。</li>
+<li><strong>③</strong>：所有输出来自 <code>query.output</code>，由 Conversation 统一转发。
+Llm 不直接连调用方。</li>
+<li><strong>④→⑤</strong>：<strong>循环的那一圈</strong>。Tool 报告跑完，Conversation 看到 <code>tool_results</code>
+这个理由，再次请 Llm。这一圈回到②就是 <code>while (true)</code> 的等价物。</li>
+<li><strong>⑥</strong>：模型不再调工具时，Conversation 发 <code>query.finished</code>，
+带一个 <code>Terminal.reason</code> 告诉调用方为什么结束。</li>
+</ul>
+<h3 id="sec-18-与-pi-的双层循环对照">与 Pi 的双层循环对照</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Pi（<code>agent-loop.ts</code> 960 行）</th>
+<th>Qwen（<code>agent-loop.ts</code> 86 行）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>循环住在哪</td>
+<td>函数里的 <code>while</code></td>
+<td>事件转发的闭环（④→⑤）</td>
+</tr>
+<tr>
+<td>谁能终止</td>
+<td>循环体里的 <code>return</code></td>
+<td>只有 Conversation 能发 <code>query.finished</code></td>
+</tr>
+<tr>
+<td>流式输出</td>
+<td>循环体里 <code>yield</code></td>
+<td><code>query.output</code> 事件</td>
+</tr>
+<tr>
+<td>新增一个行为</td>
+<td>改循环体，风险集中</td>
+<td>新增订阅者，不碰已有 handler</td>
+</tr>
+<tr>
+<td>调试一个死循环</td>
+<td>看栈</td>
+<td>看事件序列</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>两种方案都没错，但代价不同</strong>：Pi 的循环一眼能读完，改起来要小心；
+Qwen 的总线每块都好懂，但「整体在干什么」需要把三张订阅表拼起来才知道。
+这就是本章的价值——把那张表拼出来。</p>
+<h2 id="sec-19-六-工程暗坑-本章实测">六、工程暗坑（本章实测）</h2>
+<p><strong>坑一：<code>sessionId</code> 不能当路由键。</strong>
+初读 <code>BusEvent</code> 很容易把 <code>sessionId</code> 理解成默认分组依据。注释已经堵死了：
+<code>Attribution only; never a routing key</code>（events.ts:103）。
+一旦按 session 路由，同会话里的子 Agent 查询就会收到彼此的事件。</p>
+<p><strong>坑二：<code>publish</code> 是同步的，但 handler 是异步的。</strong>
+<code>publish()</code> 返回 <code>void</code>，并不意味着 handler 已经跑完。如果你想「发一个事件然后立刻读结果」，
+会读到旧值。正确方式是订阅结果事件（如 <code>tool.settled</code>）。</p>
+<p><strong>坑三：<code>handler.failed</code> 有递归短路。</strong>
+<code>reportFailure</code> 发现当前事件已经是 <code>handler.failed</code> 时只打日志（bus.ts:92-98）。
+这意味着：如果一个 handler 在处理失败事件时又挂了，你不会拿到第二个事件。
+排查时得去看 <code>runLogger.warn</code> 的输出。</p>
+<p><strong>坑四：<code>conversation</code> 失败才会结束查询。</strong>
+其他 handler 挂了只产生 <code>handler.failed</code>，查询继续。这在生产里是好事（单个工具崩了不至于全挂），
+但在开发时会让「工具静默消失」变得难查——必须订阅 <code>handler.failed</code> 才能看到。</p>
+<h2 id="sec-20-七-本章源码索引">七、本章源码索引</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>行数</th>
+<th>一句话职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>core/src/core/agent-loop.ts</code></td>
+<td>86</td>
+<td><code>query()</code> 门面：校验参数、算初始模型、交给总线</td>
+</tr>
+<tr>
+<td><code>core/src/event-bus/bus.ts</code></td>
+<td>148</td>
+<td>投递层：订阅、发布、串行链、失败转事件</td>
+</tr>
+<tr>
+<td><code>core/src/event-bus/events.ts</code></td>
+<td>115</td>
+<td>类型底座：10 个事件、4 个 handler 名、9 种 request 理由</td>
+</tr>
+<tr>
+<td><code>core/src/event-bus/runtime.ts</code></td>
+<td>36</td>
+<td>把一个 bus + 一个 store + 三个 handler 装起来</td>
+</tr>
+<tr>
+<td><code>core/src/event-bus/query-stream.ts</code></td>
+<td>535</td>
+<td><code>QueryListener</code>：总线 → 异步流，含取消与关闭语义</td>
+</tr>
+<tr>
+<td><code>core/src/event-bus/conversation-handler.ts</code></td>
+<td>466</td>
+<td>决策者：收到终结信号后决定再问还是结束</td>
+</tr>
+<tr>
+<td><code>core/src/event-bus/llm-handler.ts</code></td>
+<td>312</td>
+<td>执行者：只订阅 <code>llm.request</code>，跑一轮模型</td>
+</tr>
+<tr>
+<td><code>core/src/event-bus/tool-handler.ts</code></td>
+<td>348</td>
+<td>执行者：跑工具、汇总结果、发出 <code>tool.settled</code></td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="sec-21-八-自己动手验证">八、自己动手验证</h2>
+<p>不需要装依赖，直接用 Node 读源码验证本章的五个断言：</p>
+<div class="code-block" data-lang="powershell">
+<div class="code-head"><span class="lang">powershell</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">cd sources/qwen-code-1.0.0-preview</span><span class="ln"></span><span class="ln"># 把下面五行存成 check.mjs，再 node check.mjs</span></code></pre></div>
+<p>&lt;!-- file: qw-examples/check-eventbus.mjs --&gt;</p>
+<div class="code-block" data-lang="js">
+<div class="code-head"><span class="lang">js</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln"><span class="tok-kw">import</span> fs <span class="tok-kw">from</span> <span class="tok-str">'node:fs'</span>;</span><span class="ln"></span><span class="ln"><span class="tok-kw">const</span> EB = <span class="tok-str">'packages/core/src/event-bus'</span>;</span><span class="ln"><span class="tok-kw">const</span> len = (p) =&gt; fs.<span class="tok-fn">readFileSync</span>(p, <span class="tok-str">'utf8'</span>).<span class="tok-fn">split</span>(<span class="tok-str">'\n'</span>).length;</span><span class="ln"></span><span class="ln"><span class="tok-com">// 1. query() 多长？应为 86</span></span><span class="ln">console.<span class="tok-fn">log</span>(<span class="tok-str">'agent-loop.ts'</span>, <span class="tok-fn">len</span>(<span class="tok-str">'packages/core/src/core/agent-loop.ts'</span>));</span><span class="ln"></span><span class="ln"><span class="tok-com">// 2. 几个事件类型？应为 10</span></span><span class="ln"><span class="tok-kw">const</span> ev = fs.<span class="tok-fn">readFileSync</span>(<span class="tok-str">`${EB}/events.ts`</span>, <span class="tok-str">'utf8'</span>);</span><span class="ln">console.<span class="tok-fn">log</span>(<span class="tok-str">'event types'</span>, (ev.<span class="tok-kw">match</span>(/^  <span class="tok-str">'[a-z]+\.[a-z_]+'</span>:/gm) || []).length);</span><span class="ln"></span><span class="ln"><span class="tok-com">// 3. LlmHandler 订阅什么？应只有 llm.request</span></span><span class="ln"><span class="tok-kw">const</span> llm = fs.<span class="tok-fn">readFileSync</span>(<span class="tok-str">`${EB}/llm-handler.ts`</span>, <span class="tok-str">'utf8'</span>);</span><span class="ln">console.<span class="tok-fn">log</span>(<span class="tok-str">'llm subscribes'</span>, llm.<span class="tok-kw">match</span>(/subscribe\([\s\S]*?\]/)[<span class="tok-num">0</span>].<span class="tok-fn">trim</span>());</span><span class="ln"></span><span class="ln"><span class="tok-com">// 4. bus.ts 用锁了吗？应输出 false</span></span><span class="ln"><span class="tok-kw">const</span> bus = fs.<span class="tok-fn">readFileSync</span>(<span class="tok-str">`${EB}/bus.ts`</span>, <span class="tok-str">'utf8'</span>);</span><span class="ln">console.<span class="tok-fn">log</span>(<span class="tok-str">'uses lock'</span>, /Mutex|Semaphore|<span class="tok-kw">new</span> Lock/.<span class="tok-fn">test</span>(bus));</span><span class="ln"></span><span class="ln"><span class="tok-com">// 5. runtime 装几个 handler？应为 3</span></span><span class="ln"><span class="tok-kw">const</span> rt = fs.<span class="tok-fn">readFileSync</span>(<span class="tok-str">`${EB}/runtime.ts`</span>, <span class="tok-str">'utf8'</span>);</span><span class="ln">console.<span class="tok-fn">log</span>(<span class="tok-str">'handlers'</span>, (rt.<span class="tok-kw">match</span>(/<span class="tok-kw">new</span> (\w+)Handler/g) || []).length);</span></code></pre></div>
+<h2 id="sec-22-九-下一步">九、下一步</h2>
+<p>本章只讲了「事件怎么走」，没讲「事件里到底装了什么」。
+下一章 Q04 拆 <code>conversation-handler.ts</code>（466 行）：
+它收到 <code>llm.settled</code> 后，到底靠什么判断该 <code>tool_results</code> 还是 <code>finished</code>？
+<code>query-turn.ts</code> 与 <code>turn-budget.ts</code> 各管什么？</p>
+<hr>
+<blockquote>
+<p><strong>本章读完你应该能回答</strong>：
+① 为什么 <code>query()</code> 只有 86 行？
+——它只算初始模型，循环在事件闭环里。
+② 三个 handler 为什么不会互相堵死？
+——同订阅同 query 串行，不同 query 各自一条链。
+③ 取消为什么能立刻生效？——<code>AbortSignal</code> 断 IO，事件留痕，双通道。
+④ 谁决定「再问一次模型」？
+——只有 Conversation，依据是 <code>RequestReason</code> 九个值。
+⑤ 一次对话在生产里怎么定位？
+——按 <code>queryId</code> 追事件序列，<code>parentQueryId</code> 追嵌套。</p>
+</blockquote>
+
+<div class="pager">
+      <a class="prev" href="q02-repo-map.html"><span class="lbl">上一篇</span>仓库地图 —— 4 个包、55 个目录、7 个入口</a>
+      <a class="next" href="q04-turn-control.html"><span class="lbl">下一篇</span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</a>
+    </div>
+</main>
+<nav class="toc"><div class="toc-title">本章目录</div><a href="#sec-1-一-入口只有-35-行" class="">一、入口只有 35 行</a><a href="#sec-2-文件头自己写的定位" class="lv3">文件头自己写的定位</a><a href="#sec-3-二-总线的-148-行" class="">二、总线的 148 行</a><a href="#sec-4-订阅-一个回调-一份退订" class="lv3">订阅：一个回调 + 一份退订</a><a href="#sec-5-发布-三道过滤-一次投递" class="lv3">发布：三道过滤 + 一次投递</a><a href="#sec-6-投递-用-promise-链排队" class="lv3">投递：用 Promise 链排队</a><a href="#sec-7-失败不吞-转成事件" class="lv3">失败不吞，转成事件</a><a href="#sec-8-三-十个事件-四个角色" class="">三、十个事件，四个角色</a><a href="#sec-9-llm-request-带的是-为什么" class="lv3">llm.request 带的是「为什么」</a><a href="#sec-10-事件信封不可省" class="lv3">事件信封不可省</a><a href="#sec-11-四-query-如何-只是听" class="">四、query() 如何「只是听」</a><a href="#sec-12-订阅三件事-别的一概不管" class="lv3">订阅三件事，别的一概不管</a><a href="#sec-13-取消-先响信号-再发事件" class="lv3">取消：先响信号，再发事件</a><a href="#sec-14-四个取消源" class="lv3">四个取消源</a><a href="#sec-15-五-三个-handler-的接力表" class="">五、三个 handler 的接力表</a><a href="#sec-16-读这张表的三个发现" class="lv3">读这张表的三个发现</a><a href="#sec-17-一轮的完整路径" class="lv3">一轮的完整路径</a><a href="#sec-18-与-pi-的双层循环对照" class="lv3">与 Pi 的双层循环对照</a><a href="#sec-19-六-工程暗坑-本章实测" class="">六、工程暗坑（本章实测）</a><a href="#sec-20-七-本章源码索引" class="">七、本章源码索引</a><a href="#sec-21-八-自己动手验证" class="">八、自己动手验证</a><a href="#sec-22-九-下一步" class="">九、下一步</a></nav>
+</div>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var key = "qw-book-theme";
+  var saved = localStorage.getItem(key);
+  if (saved) root.setAttribute("data-theme", saved);
+  var btn = document.getElementById("theme-toggle");
+  function label() {
+    btn.textContent = root.getAttribute("data-theme") === "dark" ? "浅色" : "深色";
+  }
+  label();
+  btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem(key, next);
+    label();
+  });
+
+  var rail = document.getElementById("progress-rail");
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    rail.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+  if (links.length) {
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+    function mark() {
+      var best = -1;
+      targets.forEach(function (t, i) {
+        if (t && t.getBoundingClientRect().top <= 120) best = i;
+      });
+      links.forEach(function (a, i) { a.classList.toggle("active", i === best); });
+    }
+    document.addEventListener("scroll", mark, { passive: true });
+    mark();
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(
+        function () { return true; },
+        function () { return legacyCopy(text); }
+      );
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function legacyCopy(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  // 代码块复制：双击 HTML 打开时没有 secure context，所以留了 execCommand 退路
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest(".copy");
+    if (!button) return;
+    var lines = button.closest(".code-block").querySelectorAll(".ln");
+    var text = Array.prototype.map.call(lines, function (line) {
+      return line.textContent;
+    }).join("\n"); // 在模板字符串里必须写成 \n，否则产物中字符串字面量跨行、整块脚本语法错误
+    copyText(text).then(function (ok) {
+      button.textContent = ok ? "已复制" : "复制失败";
+      button.classList.toggle("is-done", ok);
+      setTimeout(function () {
+        button.textContent = "复制";
+        button.classList.remove("is-done");
+      }, 1200);
+    });
+  });
+})();
+</script>
+</body>
+</html>
