@@ -12,11 +12,13 @@ const MOD = path.join(BOOK, 'site', 'content', 'modules');
 const chapters = fs.readdirSync(MOD).filter((f) => /^q\d\d-.*\.md$/.test(f)).sort();
 let issues = 0;
 
+// 正文用 qw-examples/check/QNN-*.mjs；单章专用的特例允许显式指定（如 Q03 的 check-eventbus.mjs）
+const SPECIAL = { 'q03-query-eventbus.md': 'check-eventbus.mjs' };
 for (const ch of chapters) {
   const md = fs.readFileSync(path.join(MOD, ch), 'utf8');
-  const m = md.match(/node qw-examples\/check\/(\d\d-[a-z-]+\.mjs)/);
+  const m = md.match(/node qw-examples\/check\/([\w-]+\.mjs)/);
   if (!m) continue;
-  const script = m[1];
+  const script = SPECIAL[ch] ?? m[1];
 
   let actual = '';
   try {
@@ -61,11 +63,21 @@ for (const ch of chapters) {
   };
 
   const missing = expected.filter((l) => !hit(l));
+  // 反向核对：实测有、正文没有的行。只看「断言型」输出行（带 [OK]/[FAIL] 或含数字统计），
+  // 避免把脚本里的辅助文案也当成断言。预期块用省略号写法时放宽。
+  const loose = expected.some((l) => l.includes('...'));
+  const extra = loose ? [] : got.filter((l) => !expected.includes(l) && /[\d]/.test(l) && /[:：\->]/.test(l));
   if (missing.length) {
     issues++;
     console.log(`[DIFF] ${ch} -> ${script}`);
     for (const l of missing) console.log(`         正文有、实测无: ${l}`);
-  } else {
+  }
+  if (extra.length) {
+    issues++;
+    console.log(`[EXTRA] ${ch} -> ${script}`);
+    for (const l of extra) console.log(`         实测有、正文无: ${l}`);
+  }
+  if (!missing.length && !extra.length) {
     console.log(`[ OK ] ${ch} -> ${script} (${expected.length} 行全部命中)`);
   }
 }

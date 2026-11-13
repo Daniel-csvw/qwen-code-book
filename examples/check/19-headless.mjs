@@ -44,7 +44,9 @@ const modes = [
   ["stream-json→stdio", /inputFormat === \x27stream-json\x27/.test(perm)],
   ["remote worker", /isRemoteWorkerMode\(\)/.test(perm)],
 ];
-console.log("permission prompt modes:", modes.filter(([, ok]) => ok).length, "->", modes.map(([n]) => n).join(" | "));
+// 四种模式名较长，按 50 列软折行，避免正文代码块超宽
+const modeLine = `permission prompt modes: ${modes.filter(([, ok]) => ok).length} -> ${modes.map(([n]) => n).join(" | ")}`;
+console.log(modeLine.length <= 50 ? modeLine : modeLine.slice(0, modeLine.indexOf(" | remote")) + "\n  " + modeLine.slice(modeLine.indexOf("| remote")));
 
 // 5. run() 的结构
 const ses = read(C("headless/headlessSession.ts"));

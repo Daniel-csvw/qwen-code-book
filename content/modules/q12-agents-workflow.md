@@ -3,7 +3,7 @@ title: "Agent 与 Workflow —— 六种终止模式与四个内置代理"
 order: 12
 part: "Part C · 上下文与资产"
 eyebrow: "Q12"
-meta: "1,597 字 · 24 行代码 · 4 块 · 约 13 分钟"
+meta: "1,597 字 · 28 行代码 · 4 块 · 约 13 分钟"
 status: sample
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---
@@ -204,6 +204,10 @@ agent tool methods: 52
  2242 agents/subagent-tool.ts
  1893 agents/run-agent.ts
  1013 agents/registry/agentRegistry.ts
+  677 agents/run-subagent.ts
+  197 agents/builtin/explore-agent.ts
+  384 agents/subagent-sdk-events.ts
+  781 agents/teams/agent-team-runtime.ts
 ```
 
 改一处试试：把 `AgentTerminateMode.ERROR_NO_COMPLETE_TASK_CALL`

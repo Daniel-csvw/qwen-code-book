@@ -3,7 +3,7 @@ title: "实战五：headless 流水线"
 order: 19
 part: "Part E · 实战拓展"
 eyebrow: "Q19"
-meta: "2,139 字 · 93 行代码 · 12 块 · 约 16 分钟"
+meta: "2,145 字 · 108 行代码 · 12 块 · 约 16 分钟"
 status: sample
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---
@@ -319,8 +319,22 @@ headless routes: 2 -> headlessStreamJson / headlessText
 exit code: is_error -> 1: true
 exit code: aborted -> 130: true
 text result subtypes handled: success, error_during_execution, error_max_turns
-permission prompt modes: 4 -> stdio | named tool | stream-json→stdio |
-  remote worker
+writeHeadlessTextResult cases: 3
+permission prompt modes: 4 -> stdio | named tool | stream-json→stdio
+  | remote worker
+run() steps: 35
+has runStreamJsonInput: true
+has runTextTurn: true
+session failure as single result frame: true
+
+关键文件行数：
+   100 core/src/utils/headless.ts
+   923 core/src/engine/headless-projection.ts
+    42 cli/src/startup/options/headless.ts
+   954 cli/src/headless/headlessSession.ts
+   273 cli/src/utils/nonInteractiveOutput.ts
+    54 cli/src/utils/headlessPermissionPrompt.ts
+   351 cli/src/nonInteractiveCliCommands.ts
 ```
 
 改一处试试：注释掉 `headless.ts:58` 里的 `!!options?.prompt`，

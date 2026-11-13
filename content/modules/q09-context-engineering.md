@@ -291,14 +291,14 @@ Q05 讲的 `prefixMessages`（`startupMemoryPrefix`）只出现在请求里，
 
 | 文件 | 行数 | 本章用到的位置 |
 | --- | --- | --- |
-| `packages/core/src/context/memoryContextManager.ts` | 1,338 | `:469-505` discoverMemoryPaths |
+| `packages/core/src/context/memoryContextManager.ts` | 1,337 | `:469-505` discoverMemoryPaths |
 | | | `:507-622` loadMemoryContents，`:624-640` 分类 |
 | | | `:695-771` InstructionsLoaded 钩子，`:777-788` JIT |
 | `packages/core/src/context/system-context.ts` | 420 | `:295-374` getSystemContext |
 | | | `:377-380` 预取接管 |
 | `packages/core/src/attachments/get-attachments.ts` | 1,005 | 附件收集入口 |
-| `packages/core/src/attachments/types.ts` | 707 | 附件类型定义 |
-| `packages/core/src/attachments/transcript-state.ts` | 614 | 附件与转录状态同步 |
+| `packages/core/src/attachments/types.ts` | 706 | 附件类型定义 |
+| `packages/core/src/attachments/transcript-state.ts` | 613 | 附件与转录状态同步 |
 | `packages/core/src/attachments/generators/file-generators.ts` | 821 | 文件类附件生成 |
 
 ## 九、自己动手验证

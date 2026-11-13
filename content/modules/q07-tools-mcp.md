@@ -3,7 +3,7 @@ title: "工具与 MCP —— 45 个内置工具如何接进同一张表"
 order: 7
 part: "Part B · 内核"
 eyebrow: "Q07"
-meta: "1,841 字 · 106 行代码 · 17 块 · 约 15 分钟"
+meta: "1,841 字 · 107 行代码 · 17 块 · 约 15 分钟"
 status: sample
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---
@@ -348,17 +348,17 @@ MCP 的返回可能是文本、图片、音频、资源链接（`:591-737` 四�
 | `packages/core/src/tools/tool-names.ts` | 658 | `:471-525` 45 个内置工具，`:531` 预设 |
 | `packages/core/src/tools/tool-registry.ts` | 1,129 | `:144-179` 字段与四个缓存 |
 | | | `:185-203` getSchema，`:211-232` applyMcpTools |
-| `packages/core/src/tools/tools.ts` | 1,434 | 工具基类与通用类型 |
-| `packages/core/src/tools/streaming-tool-executor.ts` | 770 | 流式执行器 |
-| `packages/core/src/tool-executor/state-manager.ts` | 605 | 执行状态管理 |
-| `packages/core/src/tool-executor/types.ts` | 293 | 执行器类型 |
+| `packages/core/src/tools/tools.ts` | 1,609 | 工具基类与通用类型 |
+| `packages/core/src/tools/streaming-tool-executor.ts` | 846 | 流式执行器 |
+| `packages/core/src/tool-executor/state-manager.ts` | 658 | 执行状态管理 |
+| `packages/core/src/tool-executor/types.ts` | 315 | 执行器类型 |
 | `packages/core/src/mcp/tools/mcp-tool.ts` | 1,336 | `:97-119` 名字拼装 |
 | | | `:286-300` executeRaw，`:737-886` 结果归一化 |
 | `packages/core/src/mcp/mcp-schema-sanitizer.ts` | 260 | `:26` 键约束，`:53-61` sanitizeKey |
 | | | `:74-96` pruneGhostRequired |
 | `packages/core/src/mcp/sessionMcpManager/sessionMcpManager.ts` | 1,810 | MCP 会话管理 |
 | `packages/core/src/mcp/client/mcpClient.ts` | 914 | MCP 客户端 |
-| `packages/core/src/mcp/connector/connectMcpServer.ts` | 386 | 连接建立 |
+| `packages/core/src/mcp/connector/connectMcpServer.ts` | 415 | 连接建立 |
 
 ## 十、自己动手验证
 
@@ -375,11 +375,12 @@ registry fields: 12
 getSchema paths: 4
 schema sanitizer regex: /^[a-zA-Z0-9_.-]{1,64}$/
 mcp name parts: 3
-  1129 tools/tool-registry.ts
-  1336 mcp/tools/mcp-tool.ts
-   260 mcp/mcp-schema-sanitizer.ts
-  1810 mcp/sessionMcpManager/sessionMcpManager.ts
-   914 mcp/client/mcpClient.ts
+  658 tools/tool-names.ts
+ 1129 tools/tool-registry.ts
+ 1336 mcp/tools/mcp-tool.ts
+  260 mcp/mcp-schema-sanitizer.ts
+ 1810 mcp/sessionMcpManager/sessionMcpManager.ts
+  914 mcp/client/mcpClient.ts
 ```
 
 改一处试试：把 `applyMcpTools()` 里

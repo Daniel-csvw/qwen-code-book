@@ -3,7 +3,7 @@ title: "仓库地图 —— 4 个包、55 个目录、7 个入口"
 order: 2
 part: "Part A · 全景"
 eyebrow: "Q02"
-meta: "1,632 字 · 69 行代码 · 7 块 · 约 12 分钟"
+meta: "1,718 字 · 72 行代码 · 8 块 · 约 12 分钟"
 status: final
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---
@@ -152,13 +152,25 @@ appFramework.ts              127 行  ← 抽象基类
 可以被别的产品复用。`core/package.json` 里写着 `"@qwen-code/resource": "file:../resource"`——
 本地包引用，不走 npm registry。
 
-### ink-shim：8 行
+### ink-shim：13 行的最小包
 
-一个空壳。根 `package.json` 的 dependencies 里写着 `"ink": "file:packages/ink-shim"`，
+一个包名占位符。根 `package.json` 的 dependencies 里写着 `"ink": "file:packages/ink-shim"`，
 所以任何人 `import ... from 'ink'` 拿到的都是这个本地包。
 
+它自己是个结构完整的最小 npm 包，三个文件：
+
+```text
+package.json    13 行   {"name":"ink","version":"7.0.0-gmn.0","private":true}
+index.js         8 行   export * from '../cli/dist/src/ink/index.js';
+index.d.ts       8 行   同上（类型声明）
+```
+
 真正的 Ink 兼容层在 `cli/src/ink/`——**117 个文件、22,557 行**。
-这个「8 行 shim + 2 万行实现」的组合，Q14 会解释：
+注意 `index.js` 指口径：它 re-export 的是 `cli` 的**构建产物**
+（`../cli/dist/src/ink/index.js`），不是 `src`。
+所以不 build 就跑不起来——这一点 Q01 已经提过。
+
+这个「13 行 shim + 2 万行实现」的组合，Q14 会解释：
 它不是简单的包装，而是把 Ink 的渲染契约在自己手里重新实现了一遍。
 
 ## 四、依赖边界：一条不能越的线
@@ -178,7 +190,7 @@ appFramework.ts              127 行  ← 抽象基类
 | cli | @qwen-code/core、@qwen-code/resource |
 | core | @qwen-code/resource |
 | resource | 无内部依赖 |
-| ink-shim | 无（就 8 行） |
+| ink-shim | 无（就 3 个文件、29 行） |
 
 **没有循环依赖，没有 `core` 反向依赖 `cli`。**
 这条线保证了内核可测试、可复用。违反它最常见的方式是「在 core 里 import 一个 cli 的工具函数」——
@@ -186,10 +198,11 @@ appFramework.ts              127 行  ← 抽象基类
 
 ## 五、工程暗坑
 
-**坑一：`packages/*` 不等于「所有子目录都是包」。**
+**坑一：`packages/*` 不等于「所有子目录都是 `src` 结构」。**
 根 `package.json:11-13` 的 workspaces 只有 `"packages/*"` 一行，
-但 `ink-shim` 目录下没有 `package.json` 的常规结构（它是被 `file:` 引用的），
-`source-index.mjs` 统计它时是 0 文件。别以为漏了。
+但 `ink-shim` 没有 `src/` 目录——它的 `index.js` 直接躺在包根，
+re-export 的是 `cli` 的构建产物。所以 `source-index.mjs`（只扫描 `*/src`、
+且只收 `.ts/.tsx`）统计它时是 0 文件。这不是漏统计，是它本来就没有 `src/`。
 
 **坑二：55 个目录里有 4 个是「测试辅助」。**
 `test-utils/`（3,182 行）、`constants/`、`fallback/`、`routing/` 这类目录
@@ -204,10 +217,10 @@ appFramework.ts              127 行  ← 抽象基类
 
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `cli/src/framework/appFramework.ts` | 127 | 七个入口的共同基类 |
-| `cli/src/framework/tuiAppFramework.ts` | 338 | 交互式终端入口 |
-| `cli/src/framework/headlessAppFramework.ts` | 370 | 无头入口（最大） |
-| `cli/src/framework/acpAppFramework.ts` | 346 | ACP 服务端入口 |
+| `cli/src/framework/appFramework.ts` | 126 | 七个入口的共同基类 |
+| `cli/src/framework/tuiAppFramework.ts` | 337 | 交互式终端入口 |
+| `cli/src/framework/headlessAppFramework.ts` | 369 | 无头入口（最大） |
+| `cli/src/framework/acpAppFramework.ts` | 345 | ACP 服务端入口 |
 | `core/src/event-bus/` | 19 文件 / 6,132 | 执行内核（Q03 主题） |
 | `core/src/core/` | 43 文件 / 7,699 | query 门面与回合控制 |
 | `resource/src/` | 57 文件 / 14,513 | Settings 与资源服务 |
@@ -246,7 +259,7 @@ node check/03-resource-dep.mjs
 
 地图看完了，接下来进内核。Q03 从 `query()` 那 35 行开始，
 看它如何把活派给事件总线上的三个 handler——
-这是全书最重要的一章，也是理解「86 行 vs 960 行」的关键。
+这是全书最重要的一章，也是理解「85 行 vs 960 行」的关键。
 
 ---
 

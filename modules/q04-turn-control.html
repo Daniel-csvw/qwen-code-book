@@ -19,7 +19,7 @@
 <div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
                 <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
                 <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
-                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="active">
+                <span class="code">Q03</span><span>85 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="active">
                 <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
                 <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
                 <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
@@ -43,7 +43,7 @@
 <header class="module-header">
       <div class="module-eyebrow">Q04</div>
       <h1>对话与回合 —— 一次请求如何被五个 handler 接力跑完</h1>
-      <div class="module-meta">2,095 字 · 189 行代码 · 18 块 · 约 18 分钟</div>
+      <div class="module-meta">2,097 字 · 177 行代码 · 18 块 · 约 18 分钟</div>
     </header>
     <p>Q03 讲了事件怎么在总线上流动，但只到「事件被投递」为止。
 真正把一次对话往前推的，是<strong>四个 handler 的接力</strong>：
@@ -483,8 +483,8 @@ Stop 钩子可以投票两件事：停止（<code>hook_stopped</code>），或�
 这个 bug 在正常流里看不出来，只在中断时炸。</p>
 <h2 id="sec-12-十二-下一步">十二、下一步</h2>
 <p>本章讲完「谁决定继续还是收工」，但没讲<strong>请求是怎么拼出来的</strong>。
-<code>llm.request</code> 发出去后，<code>llm-handler.ts</code>（296 行）接住它，
-然后由 <code>llm/request-preparation.ts</code>（1,074 行）装配消息、工具清单、系统提示。
+<code>llm.request</code> 发出去后，<code>llm-handler.ts</code>（311 行）接住它，
+然后由 <code>llm/request-preparation.ts</code>（1132 行）装配消息、工具清单、系统提示。
 下一章 Q05 拆这条链路：一个 <code>llm.request</code> 到一次真实 HTTP 调用之间，
 到底有几次改写、几层缓存键、几个降级分支。</p>
 <hr>
@@ -503,7 +503,7 @@ Stop 钩子可以投票两件事：停止（<code>hook_stopped</code>），或�
 </blockquote>
 
 <div class="pager">
-      <a class="prev" href="q03-query-eventbus.html"><span class="lbl">上一篇</span>86 行入口与事件总线 —— 三个 handler 如何接力</a>
+      <a class="prev" href="q03-query-eventbus.html"><span class="lbl">上一篇</span>85 行入口与事件总线 —— 三个 handler 如何接力</a>
       <a class="next" href="q05-request-prep.html"><span class="lbl">下一篇</span>一次请求的七步装配 —— 1,132 行里发生了什么</a>
     </div>
 </main>

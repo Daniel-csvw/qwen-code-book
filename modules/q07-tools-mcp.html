@@ -19,7 +19,7 @@
 <div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
                 <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
                 <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
-                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q03</span><span>85 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
                 <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
                 <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
                 <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="active">
@@ -43,7 +43,7 @@
 <header class="module-header">
       <div class="module-eyebrow">Q07</div>
       <h1>工具与 MCP —— 45 个内置工具如何接进同一张表</h1>
-      <div class="module-meta">1,841 字 · 106 行代码 · 17 块 · 约 15 分钟</div>
+      <div class="module-meta">1,841 字 · 107 行代码 · 17 块 · 约 15 分钟</div>
     </header>
     <p>Q05 讲了 <code>getToolSchemas</code> 从注册表取 schema，但没讲注册表里有什么。
 本章打开它，同时回答另一个问题：<strong>MCP 工具是外部进程提供的，凭什么能跟内置工具混在一张表里？</strong></p>
@@ -359,22 +359,22 @@ MCP 服务器收到字符串 <code>&quot;5&quot;</code> 可能直接报参数类
 </tr>
 <tr>
 <td><code>packages/core/src/tools/tools.ts</code></td>
-<td>1,434</td>
+<td>1,609</td>
 <td>工具基类与通用类型</td>
 </tr>
 <tr>
 <td><code>packages/core/src/tools/streaming-tool-executor.ts</code></td>
-<td>770</td>
+<td>846</td>
 <td>流式执行器</td>
 </tr>
 <tr>
 <td><code>packages/core/src/tool-executor/state-manager.ts</code></td>
-<td>605</td>
+<td>658</td>
 <td>执行状态管理</td>
 </tr>
 <tr>
 <td><code>packages/core/src/tool-executor/types.ts</code></td>
-<td>293</td>
+<td>315</td>
 <td>执行器类型</td>
 </tr>
 <tr>
@@ -409,7 +409,7 @@ MCP 服务器收到字符串 <code>&quot;5&quot;</code> 可能直接报参数类
 </tr>
 <tr>
 <td><code>packages/core/src/mcp/connector/connectMcpServer.ts</code></td>
-<td>386</td>
+<td>415</td>
 <td>连接建立</td>
 </tr>
 </tbody>
@@ -421,7 +421,7 @@ MCP 服务器收到字符串 <code>&quot;5&quot;</code> 可能直接报参数类
 <p>预期输出：</p>
 <div class="code-block" data-lang="text">
 <div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
-<pre><code><span class="ln">builtin tools: 45</span><span class="ln">tool presets: 1</span><span class="ln">registry fields: 12</span><span class="ln">getSchema paths: 4</span><span class="ln">schema sanitizer regex: /^[a-zA-Z0-9_.-]{1,64}$/</span><span class="ln">mcp name parts: 3</span><span class="ln">  1129 tools/tool-registry.ts</span><span class="ln">  1336 mcp/tools/mcp-tool.ts</span><span class="ln">   260 mcp/mcp-schema-sanitizer.ts</span><span class="ln">  1810 mcp/sessionMcpManager/sessionMcpManager.ts</span><span class="ln">   914 mcp/client/mcpClient.ts</span></code></pre></div>
+<pre><code><span class="ln">builtin tools: 45</span><span class="ln">tool presets: 1</span><span class="ln">registry fields: 12</span><span class="ln">getSchema paths: 4</span><span class="ln">schema sanitizer regex: /^[a-zA-Z0-9_.-]{1,64}$/</span><span class="ln">mcp name parts: 3</span><span class="ln">  658 tools/tool-names.ts</span><span class="ln"> 1129 tools/tool-registry.ts</span><span class="ln"> 1336 mcp/tools/mcp-tool.ts</span><span class="ln">  260 mcp/mcp-schema-sanitizer.ts</span><span class="ln"> 1810 mcp/sessionMcpManager/sessionMcpManager.ts</span><span class="ln">  914 mcp/client/mcpClient.ts</span></code></pre></div>
 <p>改一处试试：把 <code>applyMcpTools()</code> 里
 <code>if (this.getKnownTool(entry.qualifiedName) !== entry.tool)</code> 的引用判断
 改成永远 <code>registerTool</code>。

@@ -19,7 +19,7 @@
 <div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
                 <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="active">
                 <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
-                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q03</span><span>85 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
                 <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
                 <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
                 <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
@@ -43,7 +43,7 @@
 <header class="module-header">
       <div class="module-eyebrow">Q02</div>
       <h1>仓库地图 —— 4 个包、55 个目录、7 个入口</h1>
-      <div class="module-meta">1,632 字 · 69 行代码 · 7 块 · 约 12 分钟</div>
+      <div class="module-meta">1,718 字 · 72 行代码 · 8 块 · 约 12 分钟</div>
     </header>
     <p>上一章说了四个包的分工。这一章把它们摊开，看清目录层级。</p>
 <p>先给结论：<code>core</code> 有 <strong>55 个顶层目录</strong>，<code>cli</code> 有 <strong>11 个入口框架类</strong>。
@@ -184,11 +184,18 @@ Windows 要先 <code>prepareWindowsShell</code>。注释没解释为什么，但
 <p>为什么单独成包？因为它的依赖很干净（几乎不碰 Agent 逻辑），
 可以被别的产品复用。<code>core/package.json</code> 里写着 <code>&quot;@qwen-code/resource&quot;: &quot;file:../resource&quot;</code>——
 本地包引用，不走 npm registry。</p>
-<h3 id="sec-8-ink-shim-8-行">ink-shim：8 行</h3>
-<p>一个空壳。根 <code>package.json</code> 的 dependencies 里写着 <code>&quot;ink&quot;: &quot;file:packages/ink-shim&quot;</code>，
+<h3 id="sec-8-ink-shim-13-行的最小包">ink-shim：13 行的最小包</h3>
+<p>一个包名占位符。根 <code>package.json</code> 的 dependencies 里写着 <code>&quot;ink&quot;: &quot;file:packages/ink-shim&quot;</code>，
 所以任何人 <code>import ... from 'ink'</code> 拿到的都是这个本地包。</p>
+<p>它自己是个结构完整的最小 npm 包，三个文件：</p>
+<div class="code-block" data-lang="text">
+<div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
+<pre><code><span class="ln">package.json    13 行   {"name":"ink","version":"7.0.0-gmn.0","private":true}</span><span class="ln">index.js         8 行   export * from '../cli/dist/src/ink/index.js';</span><span class="ln">index.d.ts       8 行   同上（类型声明）</span></code></pre></div>
 <p>真正的 Ink 兼容层在 <code>cli/src/ink/</code>——<strong>117 个文件、22,557 行</strong>。
-这个「8 行 shim + 2 万行实现」的组合，Q14 会解释：
+注意 <code>index.js</code> 指口径：它 re-export 的是 <code>cli</code> 的<strong>构建产物</strong>
+（<code>../cli/dist/src/ink/index.js</code>），不是 <code>src</code>。
+所以不 build 就跑不起来——这一点 Q01 已经提过。</p>
+<p>这个「13 行 shim + 2 万行实现」的组合，Q14 会解释：
 它不是简单的包装，而是把 Ink 的渲染契约在自己手里重新实现了一遍。</p>
 <h2 id="sec-9-四-依赖边界-一条不能越的线">四、依赖边界：一条不能越的线</h2>
 <p>四个包之间的依赖是<strong>单向</strong>的：</p>
@@ -218,7 +225,7 @@ Windows 要先 <code>prepareWindowsShell</code>。注释没解释为什么，但
 </tr>
 <tr>
 <td>ink-shim</td>
-<td>无（就 8 行）</td>
+<td>无（就 3 个文件、29 行）</td>
 </tr>
 </tbody>
 </table></div>
@@ -226,10 +233,11 @@ Windows 要先 <code>prepareWindowsShell</code>。注释没解释为什么，但
 这条线保证了内核可测试、可复用。违反它最常见的方式是「在 core 里 import 一个 cli 的工具函数」——
 看起来很省事，但会让 core 再也搬不走。</p>
 <h2 id="sec-10-五-工程暗坑">五、工程暗坑</h2>
-<p><strong>坑一：<code>packages/*</code> 不等于「所有子目录都是包」。</strong>
+<p><strong>坑一：<code>packages/*</code> 不等于「所有子目录都是 <code>src</code> 结构」。</strong>
 根 <code>package.json:11-13</code> 的 workspaces 只有 <code>&quot;packages/*&quot;</code> 一行，
-但 <code>ink-shim</code> 目录下没有 <code>package.json</code> 的常规结构（它是被 <code>file:</code> 引用的），
-<code>source-index.mjs</code> 统计它时是 0 文件。别以为漏了。</p>
+但 <code>ink-shim</code> 没有 <code>src/</code> 目录——它的 <code>index.js</code> 直接躺在包根，
+re-export 的是 <code>cli</code> 的构建产物。所以 <code>source-index.mjs</code>（只扫描 <code>*/src</code>、
+且只收 <code>.ts/.tsx</code>）统计它时是 0 文件。这不是漏统计，是它本来就没有 <code>src/</code>。</p>
 <p><strong>坑二：55 个目录里有 4 个是「测试辅助」。</strong>
 <code>test-utils/</code>（3,182 行）、<code>constants/</code>、<code>fallback/</code>、<code>routing/</code> 这类目录
 不是业务模块。数目录时容易把它们算进去，导致「有哪些模块」判断失真。</p>
@@ -249,22 +257,22 @@ Windows 要先 <code>prepareWindowsShell</code>。注释没解释为什么，但
 <tbody>
 <tr>
 <td><code>cli/src/framework/appFramework.ts</code></td>
-<td>127</td>
+<td>126</td>
 <td>七个入口的共同基类</td>
 </tr>
 <tr>
 <td><code>cli/src/framework/tuiAppFramework.ts</code></td>
-<td>338</td>
+<td>337</td>
 <td>交互式终端入口</td>
 </tr>
 <tr>
 <td><code>cli/src/framework/headlessAppFramework.ts</code></td>
-<td>370</td>
+<td>369</td>
 <td>无头入口（最大）</td>
 </tr>
 <tr>
 <td><code>cli/src/framework/acpAppFramework.ts</code></td>
-<td>346</td>
+<td>345</td>
 <td>ACP 服务端入口</td>
 </tr>
 <tr>
@@ -297,7 +305,7 @@ Windows 要先 <code>prepareWindowsShell</code>。注释没解释为什么，但
 <h2 id="sec-14-八-下一步">八、下一步</h2>
 <p>地图看完了，接下来进内核。Q03 从 <code>query()</code> 那 35 行开始，
 看它如何把活派给事件总线上的三个 handler——
-这是全书最重要的一章，也是理解「86 行 vs 960 行」的关键。</p>
+这是全书最重要的一章，也是理解「85 行 vs 960 行」的关键。</p>
 <hr>
 <blockquote>
 <p><strong>本章读完你应该能回答</strong>：
@@ -315,10 +323,10 @@ Windows 要先 <code>prepareWindowsShell</code>。注释没解释为什么，但
 
 <div class="pager">
       <a class="prev" href="q01-overview.html"><span class="lbl">上一篇</span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</a>
-      <a class="next" href="q03-query-eventbus.html"><span class="lbl">下一篇</span>86 行入口与事件总线 —— 三个 handler 如何接力</a>
+      <a class="next" href="q03-query-eventbus.html"><span class="lbl">下一篇</span>85 行入口与事件总线 —— 三个 handler 如何接力</a>
     </div>
 </main>
-<nav class="toc"><div class="toc-title">本章目录</div><a href="#sec-1-一-core-55-个目录怎么分组" class="">一、core：55 个目录怎么分组</a><a href="#sec-2-四个能力圈" class="lv3">四个能力圈</a><a href="#sec-3-一个反直觉的事实" class="lv3">一个反直觉的事实</a><a href="#sec-4-二-cli-七个入口-一个内核" class="">二、cli：七个入口，一个内核</a><a href="#sec-5-七个入口意味着什么" class="lv3">七个入口意味着什么</a><a href="#sec-6-三-resource-与-ink-shim-两个小角色" class="">三、resource 与 ink-shim：两个小角色</a><a href="#sec-7-resource-57-个文件-14-513-行" class="lv3">resource：57 个文件，14,513 行</a><a href="#sec-8-ink-shim-8-行" class="lv3">ink-shim：8 行</a><a href="#sec-9-四-依赖边界-一条不能越的线" class="">四、依赖边界：一条不能越的线</a><a href="#sec-10-五-工程暗坑" class="">五、工程暗坑</a><a href="#sec-11-六-本章源码索引" class="">六、本章源码索引</a><a href="#sec-12-七-自己动手验证" class="">七、自己动手验证</a><a href="#sec-13-改一处试试" class="lv3">改一处试试</a><a href="#sec-14-八-下一步" class="">八、下一步</a></nav>
+<nav class="toc"><div class="toc-title">本章目录</div><a href="#sec-1-一-core-55-个目录怎么分组" class="">一、core：55 个目录怎么分组</a><a href="#sec-2-四个能力圈" class="lv3">四个能力圈</a><a href="#sec-3-一个反直觉的事实" class="lv3">一个反直觉的事实</a><a href="#sec-4-二-cli-七个入口-一个内核" class="">二、cli：七个入口，一个内核</a><a href="#sec-5-七个入口意味着什么" class="lv3">七个入口意味着什么</a><a href="#sec-6-三-resource-与-ink-shim-两个小角色" class="">三、resource 与 ink-shim：两个小角色</a><a href="#sec-7-resource-57-个文件-14-513-行" class="lv3">resource：57 个文件，14,513 行</a><a href="#sec-8-ink-shim-13-行的最小包" class="lv3">ink-shim：13 行的最小包</a><a href="#sec-9-四-依赖边界-一条不能越的线" class="">四、依赖边界：一条不能越的线</a><a href="#sec-10-五-工程暗坑" class="">五、工程暗坑</a><a href="#sec-11-六-本章源码索引" class="">六、本章源码索引</a><a href="#sec-12-七-自己动手验证" class="">七、自己动手验证</a><a href="#sec-13-改一处试试" class="lv3">改一处试试</a><a href="#sec-14-八-下一步" class="">八、下一步</a></nav>
 </div>
 </div>
 <script>

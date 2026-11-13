@@ -3,7 +3,7 @@ title: "一次请求的七步装配 —— 1,132 行里发生了什么"
 order: 5
 part: "Part B · 内核"
 eyebrow: "Q05"
-meta: "1,948 字 · 173 行代码 · 15 块 · 约 16 分钟"
+meta: "1,948 字 · 174 行代码 · 15 块 · 约 16 分钟"
 status: sample
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---
@@ -404,7 +404,7 @@ Q04 里 `needsToolSettlement` 判的是 `toolExecutor !== undefined`，
 
 | 文件 | 行数 | 本章用到的位置 |
 | --- | --- | --- |
-| `packages/core/src/event-bus/llm-handler.ts` | 312 | `:54-58` register，`:61-71` handle |
+| `packages/core/src/event-bus/llm-handler.ts` | 311 | `:54-58` register，`:61-71` handle |
 | | | `:73-112` runRound，`:114-142` settle，`:159-170` 失败分类 |
 | `packages/core/src/event-bus/llm/request-preparation.ts` | 1,132 | `:209-244` prepareRequest |
 | | | `:162-173` getToolSchemas，`:669-1010` assembleRequest |

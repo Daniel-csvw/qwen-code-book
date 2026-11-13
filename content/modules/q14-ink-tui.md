@@ -219,19 +219,19 @@ Q13 讲过 `--bare` 是唯一跳 shell 准备与 TUI 的入口。
 
 | 文件 | 行数 | 本章用到的位置 |
 | --- | --- | --- |
-| `packages/cli/src/ink/renderer.ts` | 189 | `:1-9` license 头
+| `packages/cli/src/ink/renderer.ts` | 188 | `:1-9` license 头
 | | | `:25-37` RenderOptions，`:41-` createRenderer |
-| `packages/cli/src/ink/render-node-to-output.ts` | 1,518 | 布局到字符格子 |
-| `packages/cli/src/ink/screen.ts` | 1,444 | 屏幕与单元格 diff |
-| `packages/cli/src/ink/log-update.ts` | 987 | ANSI 输出 |
-| `packages/cli/src/ink/output.ts` | 808 | 输出缓冲 |
-| `packages/cli/src/ink/parse-keypress.ts` | 1,182 | 按键解析 |
-| `packages/cli/src/ink/styles.ts` | 786 | 样式系统 |
-| `packages/cli/src/ink/reconciler.ts` | 514 | 虚拟树协调 |
-| `packages/cli/src/ink/dom.ts` | 445 | 轻量 DOM |
-| `packages/cli/src/ink/stringWidth.ts` | 237 | 显示宽度 |
-| `packages/cli/src/ink/optimizer.ts` | 104 | diff 优化 |
-| `packages/cli/src/ui/utils/toolDisplayProjection.ts` | 965 | 工具显示投影 |
+| `packages/cli/src/ink/render-node-to-output.ts` | 1,517 | 布局到字符格子 |
+| `packages/cli/src/ink/screen.ts` | 1,443 | 屏幕与单元格 diff |
+| `packages/cli/src/ink/log-update.ts` | 986 | ANSI 输出 |
+| `packages/cli/src/ink/output.ts` | 807 | 输出缓冲 |
+| `packages/cli/src/ink/parse-keypress.ts` | 1,181 | 按键解析 |
+| `packages/cli/src/ink/styles.ts` | 785 | 样式系统 |
+| `packages/cli/src/ink/reconciler.ts` | 513 | 虚拟树协调 |
+| `packages/cli/src/ink/dom.ts` | 444 | 轻量 DOM |
+| `packages/cli/src/ink/stringWidth.ts` | 236 | 显示宽度 |
+| `packages/cli/src/ink/optimizer.ts` | 103 | diff 优化 |
+| `packages/cli/src/ui/utils/toolDisplayProjection.ts` | 964 | 工具显示投影 |
 
 ## 九、自己动手验证
 

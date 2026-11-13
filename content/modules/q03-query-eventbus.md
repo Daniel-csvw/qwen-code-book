@@ -1,9 +1,9 @@
 ---
-title: "86 行入口与事件总线 —— 三个 handler 如何接力"
+title: "85 行入口与事件总线 —— 三个 handler 如何接力"
 order: 3
 part: "Part B · 内核"
 eyebrow: "Q03"
-meta: "3,016 字 · 259 行代码 · 17 块 · 约 15 分钟"
+meta: "3,185 字 · 246 行代码 · 17 块 · 约 15 分钟"
 status: sample
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---
@@ -11,14 +11,14 @@ snapshot: "1.0.0-preview @ 2026-11-12"
 一个 Agent 的循环可以写成 `while (true) { 模型; 工具; }`——Pi 教程里那个 960 行的
 `agent-loop.ts` 就是这么干的，直白、好读、一眼看穿。
 
-Qwen Code 1.0 Preview 选了反方向。它的 `agent-loop.ts` **只有 86 行**，其中真正的
+Qwen Code 1.0 Preview 选了反方向。它的 `agent-loop.ts` **只有 85 行**，其中真正的
 `query()` 函数 35 行，最后一行是 `return createQueryStream(options, initialModel)`——
 把活全推给了事件总线。
 
 这不是偷懒。这是把「谁在什么时候做什么」从**调用栈**搬到了**事件流**。
 
 > 本章读的是 `packages/core/src/event-bus/` 下的五个文件（共 1,809 行）与
-> `packages/core/src/core/agent-loop.ts`（86 行）。读完你应该能回答：
+> `packages/core/src/core/agent-loop.ts`（85 行）。读完你应该能回答：
 > 一次对话里，谁决定了「再问一次模型」？为什么三个 handler 不会互相堵死？
 > 为什么取消能立刻生效？
 
@@ -156,7 +156,7 @@ export class QueryEventBus {
 `queryName` 默认取 `source`（handler 名），但可以覆盖——
 `QueryListener` 就用了 `query:${queryId}` 作为名字（后文会看到）。
 
-### 发布：三道过滤 + 一次投递
+### 发布：两道过滤 + 一次投递
 
 <!-- file: qwen-code-1.0.0-preview/packages/core/src/event-bus/bus.ts:69-84 -->
 ```ts
@@ -214,11 +214,11 @@ export class QueryEventBus {
   一个订阅 + 一个查询 = 一条独立的串行链。
 - `previous = chains.get(key) ?? Promise.resolve()`：取出这条链上一次的尾巴。
 - `next = previous.then(...)`：把本次投递**接到尾巴后面**。
-  `@` 于是同一 key 的事件严格按 publish 顺序执行，不需要锁、不需要队列数据结构。
+  于是同一 key 的事件严格按 publish 顺序执行，不需要锁、不需要队列数据结构。
 - `chains.set(key, next)`：更新尾巴。
 - 尾部清理：只有当自己仍是尾巴时才删，避免误删后来者的链。
 
-这三行合起来实现了「每个 key 一条串行队列，不同 key 并行」。用的是 Promise 链，
+这四步合起来实现了「每个 key 一条串行队列，不同 key 并行」。用的是 Promise 链，
 不是 `async` 队列，也不是 Mutex——**零依赖、零锁**。
 
 ### 失败不吞，转成事件
@@ -257,8 +257,8 @@ export class QueryEventBus {
 handler 抛异常不会让进程崩，也不会静默消失——它变成一个 `handler.failed` 事件，
 带着「谁失败了、在处理什么事件时失败、错误是什么」，重新进入总线。
 
-递归保护（:92-98）：如果失败的事件本身就是 `handler.failed`，只打日志不再发布，
-否则会无限套娃。
+递归保护（`reportFailure` 开头，:92-98）：如果失败的事件本身就是 `handler.failed`，
+只打日志不再发布，否则会无限套娃。
 
 这个设计让**失败也是一等公民**：上层可以订阅 `handler.failed` 做降级、上报、
 或像 `QueryListener` 那样把 conversation 的失败转成取消（下节会看到）。
@@ -325,7 +325,7 @@ export interface BusEvent<T extends QueryBusEventType = QueryBusEventType> {
 
 四个字段各司其职，注释把边界钉得很死：
 
-- `eventId`：去重键。`publish` 里 `randomUUID()` 自动生成（bus.ts:72）。
+- `eventId`：去重键。`publish` 里 `randomUUID()` 自动生成（bus.ts:70-73）。
 - `sessionId`：**仅用于归因，永不作为路由键**。这是有意的——一个会话可以跑多个查询
   （子 Agent、side question），按 session 路由会让它们互相干扰。
 - `queryId`：**唯一的真路由键**。
@@ -535,7 +535,7 @@ Llm 不需要知道上一轮发生了什么、工具跑得怎么样，它只需�
 
 ### 与 Pi 的双层循环对照
 
-| | Pi（`agent-loop.ts` 960 行） | Qwen（`agent-loop.ts` 86 行） |
+| | Pi（`agent-loop.ts` 960 行） | Qwen（`agent-loop.ts` 85 行） |
 |---|---|---|
 | 循环住在哪 | 函数里的 `while` | 事件转发的闭环（④→⑤） |
 | 谁能终止 | 循环体里的 `return` | 只有 Conversation 能发 `query.finished` |
@@ -571,63 +571,60 @@ Qwen 的总线每块都好懂，但「整体在干什么」需要把三张订阅
 
 | 文件 | 行数 | 一句话职责 |
 |---|---|---|
-| `core/src/core/agent-loop.ts` | 86 | `query()` 门面：校验参数、算初始模型、交给总线 |
-| `core/src/event-bus/bus.ts` | 148 | 投递层：订阅、发布、串行链、失败转事件 |
-| `core/src/event-bus/events.ts` | 115 | 类型底座：10 个事件、4 个 handler 名、9 种 request 理由 |
-| `core/src/event-bus/runtime.ts` | 36 | 把一个 bus + 一个 store + 三个 handler 装起来 |
-| `core/src/event-bus/query-stream.ts` | 535 | `QueryListener`：总线 → 异步流，含取消与关闭语义 |
-| `core/src/event-bus/conversation-handler.ts` | 466 | 决策者：收到终结信号后决定再问还是结束 |
-| `core/src/event-bus/llm-handler.ts` | 312 | 执行者：只订阅 `llm.request`，跑一轮模型 |
-| `core/src/event-bus/tool-handler.ts` | 348 | 执行者：跑工具、汇总结果、发出 `tool.settled` |
+| `core/src/core/agent-loop.ts` | 85 | `query()` 门面：校验参数、算初始模型、交给总线 |
+| `core/src/event-bus/bus.ts` | 147 | 投递层：订阅、发布、串行链、失败转事件 |
+| `core/src/event-bus/events.ts` | 114 | 类型底座：10 个事件、4 个 handler 名、9 种 request 理由 |
+| `core/src/event-bus/runtime.ts` | 35 | 把一个 bus + 一个 store + 三个 handler 装起来 |
+| `core/src/event-bus/query-stream.ts` | 534 | `QueryListener`：总线 → 异步流，含取消与关闭语义 |
+| `core/src/event-bus/conversation-handler.ts` | 465 | 决策者：收到终结信号后决定再问还是结束 |
+| `core/src/event-bus/llm-handler.ts` | 311 | 执行者：只订阅 `llm.request`，跑一轮模型 |
+| `core/src/event-bus/tool-handler.ts` | 347 | 执行者：跑工具、汇总结果、发出 `tool.settled` |
 
 ## 八、自己动手验证
 
-不需要装依赖，直接用 Node 读源码验证本章的五个断言：
+不需要装依赖，直接用 Node 读源码验证本章的七条断言。
+脚本自带判据：不符就打印 `FAIL` 并以 exit 1 结束，不存在「看上去对」。
 
 ```powershell
 cd sources/qwen-code-1.0.0-preview
-
-# 把下面五行存成 check.mjs，再 node check.mjs
+node qw-examples/check/check-eventbus.mjs
 ```
 
-<!-- file: qw-examples/check-eventbus.mjs -->
-```js
-import fs from 'node:fs';
+预期输出：
+```text
+[OK] agent-loop.ts 行数: 85（应为 85）
+[OK] 事件类型数: 10（应为 10）
+[OK] HandlerName 值个数: 4（应为 4）
+[OK] Llm 订阅事件数: 1（应为 1）
+[OK] uses lock: false（应为 false）
+[OK] handler 个数: 3（应为 3）
+[OK] deliver 用 NUL 分隔 key: true（应为 true）
 
-const EB = 'packages/core/src/event-bus';
-const len = (p) => fs.readFileSync(p, 'utf8').split('\n').length;
-
-// 1. query() 多长？应为 86
-console.log('agent-loop.ts', len('packages/core/src/core/agent-loop.ts'));
-
-// 2. 几个事件类型？应为 10
-const ev = fs.readFileSync(`${EB}/events.ts`, 'utf8');
-console.log('event types', (ev.match(/^  '[a-z]+\.[a-z_]+':/gm) || []).length);
-
-// 3. LlmHandler 订阅什么？应只有 llm.request
-const llm = fs.readFileSync(`${EB}/llm-handler.ts`, 'utf8');
-console.log('llm subscribes', llm.match(/subscribe\([\s\S]*?\]/)[0].trim());
-
-// 4. bus.ts 用锁了吗？应输出 false
-const bus = fs.readFileSync(`${EB}/bus.ts`, 'utf8');
-console.log('uses lock', /Mutex|Semaphore|new Lock/.test(bus));
-
-// 5. runtime 装几个 handler？应为 3
-const rt = fs.readFileSync(`${EB}/runtime.ts`, 'utf8');
-console.log('handlers', (rt.match(/new (\w+)Handler/g) || []).length);
+全部断言通过（7/7）
 ```
+
+七条断言分别对应本章七个论断：行数（第一章）、事件与角色数量（第三节）、
+Llm 只订阅一个事件（第五章发现二）、零锁（第二节）、三个 handler（第五节）、
+串行链的 key 构造（第二节投递），一条都没漏。
+
+### 改一处试试
+
+把 `events.ts:74-95` 的 `QueryBusEventMap` 里删掉任意一个事件，再跑一次脚本。
+预期：`事件类型数: 9` → `FAIL`，exit 1。
+这说明「十个事件」不是描述，而是被断言钉住的契约；
+真删了一个却没人发现，才是总线设计最危险的情况。
 
 ## 九、下一步
 
 本章只讲了「事件怎么走」，没讲「事件里到底装了什么」。
-下一章 Q04 拆 `conversation-handler.ts`（466 行）：
+下一章 Q04 拆 `conversation-handler.ts`（465 行）：
 它收到 `llm.settled` 后，到底靠什么判断该 `tool_results` 还是 `finished`？
 `query-turn.ts` 与 `turn-budget.ts` 各管什么？
 
 ---
 
 > **本章读完你应该能回答**：
-> ① 为什么 `query()` 只有 86 行？
+> ① 为什么 `query()` 只有 85 行？
 >    ——它只算初始模型，循环在事件闭环里。
 > ② 三个 handler 为什么不会互相堵死？
 >    ——同订阅同 query 串行，不同 query 各自一条链。

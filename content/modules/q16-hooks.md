@@ -3,7 +3,7 @@ title: "实战二：写一个钩子——三道拦截"
 order: 16
 part: "Part E · 实战拓展"
 eyebrow: "Q16"
-meta: "1,701 字 · 31 行代码 · 9 块 · 约 14 分钟"
+meta: "1,495 字 · 34 行代码 · 9 块 · 约 14 分钟"
 status: sample
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---

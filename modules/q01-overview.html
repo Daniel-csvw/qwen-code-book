@@ -19,7 +19,7 @@
 <div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="active">
                 <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
                 <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
-                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q03</span><span>85 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
                 <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
                 <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
                 <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
@@ -43,7 +43,7 @@
 <header class="module-header">
       <div class="module-eyebrow">Q01</div>
       <h1>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</h1>
-      <div class="module-meta">2,127 字 · 62 行代码 · 9 块 · 约 13 分钟</div>
+      <div class="module-meta">2,270 字 · 62 行代码 · 9 块 · 约 13 分钟</div>
     </header>
     <p>打开 <code>sources/qwen-code-1.0.0-preview/</code>，你会看到只有四个包。</p>
 <p>不是一个庞大到需要分类的 monorepo，不是十几个各自为政的工作区，就四个：
@@ -52,16 +52,23 @@
 <code>cli</code> 占 23 万行。这本书要做的，是把这 56 万行拆开，告诉你一次对话里
 每一层为什么这么写。</p>
 <h2 id="sec-1-一-这本书讲什么">一、这本书讲什么</h2>
-<p>一句话：<strong>一个产品级 Coding Agent 的 Harness，是怎么从一个 86 行的入口长出来的。</strong></p>
+<p>一句话：<strong>一个产品级 Coding Agent 的 Harness，是怎么从一个 85 行的入口长出来的。</strong></p>
 <p>这里的「Harness」指外壳——不是模型本身，而是把模型变成能干活的 Agent 的那一整套：
 工具调度、权限确认、上下文装配、会话持久化、失败恢复、插件机制。
 模型换一代，外壳的复杂度不会降；外壳写得好不好，直接决定 Agent 能不能上生产。</p>
 <p>全书的主线是一次 <code>query()</code> 的旅程：</p>
 <div class="code-block" data-lang="text">
 <div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
-<pre><code><span class="ln">用户输入</span><span class="ln">   │</span><span class="ln">   ├─ Q03 事件总线 ──── 86 行入口如何把活派给三个 handler</span><span class="ln">   ├─ Q04 对话与回合─── 谁决定「再问一次模型」</span><span class="ln">   ├─ Q05 模型层 ────── 九种 provider 怎么收敛成一个接口</span><span class="ln">   ├─ Q06 工具执行 ──── executor + state + snapshot 三分</span><span class="ln">   ├─ Q07 工具与 MCP ── 166 个工具文件的主干</span><span class="ln">   ├─ Q08 权限与钩子 ── 什么时候必须停下来问人</span><span class="ln">   │</span><span class="ln">   ├─ Q09 上下文装配 ── 请求里到底塞了什么</span><span class="ln">   ├─ Q10 记忆与压缩 ── 上下文满了怎么办</span><span class="ln">   ├─ Q11 技能与插件 ── 怎么把新能力装进去</span><span class="ln">   ├─ Q12 子 Agent ──── 一个 Agent 怎么分裂成多个</span><span class="ln">   │</span><span class="ln">   ├─ Q13 ACP/headless ─ 让别的程序驱动它</span><span class="ln">   └─ Q14 TUI/ink ────── 终端界面怎么渲染</span></code></pre></div>
-<p>前八章讲「一次对话怎么跑完」，中间四章讲「跑的过程中用到什么」，
-最后两章讲「怎么从外面驱动它」。Part E 五章是实战，用这套框架做真实扩展。</p>
+<pre><code><span class="ln">用户输入</span><span class="ln">   │</span><span class="ln">   ├─ Q03 事件总线 ──── 85 行入口如何把活派给三个 handler</span><span class="ln">   ├─ Q04 对话与回合─── 谁决定「再问一次模型」</span><span class="ln">   ├─ Q05 请求装配 ──── 一个 llm.request 怎么变成一次 HTTP 调用</span><span class="ln">   ├─ Q06 消息协议 ──── 七种消息怎么投影成一次请求</span><span class="ln">   ├─ Q07 工具与 MCP ── 45 个内置工具怎么接进同一张表</span><span class="ln">   ├─ Q08 权限与钩子 ── 什么时候必须停下来问人</span><span class="ln">   │</span><span class="ln">   ├─ Q09 上下文装配 ── 请求里到底塞了什么</span><span class="ln">   ├─ Q10 记忆与压缩 ── 上下文满了怎么办</span><span class="ln">   ├─ Q11 技能与插件 ── 怎么把新能力装进去</span><span class="ln">   ├─ Q12 子 Agent ──── 一个 Agent 怎么分裂成多个</span><span class="ln">   │</span><span class="ln">   ├─ Q13 ACP/headless ─ 让别的程序驱动它</span><span class="ln">   └─ Q14 TUI/ink ────── 终端界面怎么渲染</span></code></pre></div>
+<p>全书分五部分：</p>
+<ul>
+<li><strong>Part A（Q01–Q02）</strong> 全景：这 56 万行是什么、目录怎么分。</li>
+<li><strong>Part B（Q03–Q08）</strong> 内核：一次对话从入口到收工，六章拆完。</li>
+<li><strong>Part C（Q09–Q12）</strong> 上下文与资产：模型看到什么、装不下怎么压、能力怎么挂。</li>
+<li><strong>Part D（Q13–Q14）</strong> 前端：怎么从外面驱动它、终端怎么渲染。</li>
+<li><strong>Part E（Q15–Q19）</strong> 实战：工具、钩子、技能、MCP、headless 流水线，五个动手项目。</li>
+</ul>
+<p>附录 A 是按症状反查的索引，附录 B 是全书的源码坐标总表。</p>
 <h2 id="sec-2-二-版本与许可-先把话说清楚">二、版本与许可：先把话说清楚</h2>
 <h3 id="sec-3-这是-preview">这是 Preview</h3>
 <p>根 <code>package.json:3</code> 写的是 <code>&quot;version&quot;: &quot;1.0.0&quot;</code>，README 标题写的是
@@ -105,7 +112,7 @@
 <p><code>package.json:11-13</code> 的 workspaces 只有一行 <code>&quot;packages/*&quot;</code>，实际展开是四个：</p>
 <div class="code-block" data-lang="text">
 <div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
-<pre><code><span class="ln">packages/core        1,381 文件 / 332,669 行   ← UI 无关的运行时</span><span class="ln">packages/cli         1,103 文件 / 236,821 行   ← 可执行 + TUI + 入口框架</span><span class="ln">packages/resource       57 文件 /  14,513 行   ← Settings 与资源服务</span><span class="ln">packages/ink-shim        0 文件 /       0 行   ← 8 行的 Ink 占位包</span></code></pre></div>
+<pre><code><span class="ln">packages/core        1,381 文件 / 332,669 行   ← UI 无关的运行时</span><span class="ln">packages/cli         1,103 文件 / 236,821 行   ← 可执行 + TUI + 入口框架</span><span class="ln">packages/resource       57 文件 /  14,513 行   ← Settings 与资源服务</span><span class="ln">packages/ink-shim        3 文件 /      29 行   ← 占住 `ink` 包名的 shim</span></code></pre></div>
 <p>（数字来自 <code>node scripts/source-index.mjs</code> 实测，见附录的源码索引。）</p>
 <p>四个包的依赖方向很清楚：</p>
 <div class="code-block" data-lang="text">
@@ -119,8 +126,9 @@ Web 端、IDE 插件复用的前提。</li>
 daemon——全都在这一个包里，通过 <code>framework/</code> 下的多个入口类分派。</li>
 <li><strong><code>resource</code> 是配置底座</strong>：Settings 服务、资源加载。<code>core</code> 依赖它，
 而不是自己管配置。</li>
-<li><strong><code>ink-shim</code> 是个空壳</strong>：只有 8 行，用来占住 <code>ink</code> 这个依赖名，
-真正的 Ink 兼容层在 <code>cli/src/ink/</code>（22,557 行）。这个设计后面 Q14 会讲。</li>
+<li><strong><code>ink-shim</code> 是个包名占位符</strong>：3 个文件共 29 行，<code>index.js</code> 只做一句
+<code>export * from '../cli/dist/src/ink/index.js'</code>。它没有 <code>src/</code>，
+所以源码索引里计 0 文件；真正的 Ink 兼容层在 <code>cli/src/ink/</code>（22,557 行），Q14 会讲。</li>
 </ul>
 <h2 id="sec-7-四-把仓库跑起来">四、把仓库跑起来</h2>
 <h3 id="sec-8-前提">前提</h3>
@@ -148,8 +156,8 @@ Qwen 必须过一遍构建产物。</p>
 <h2 id="sec-11-五-这本书怎么读">五、这本书怎么读</h2>
 <h3 id="sec-12-三条路线">三条路线</h3>
 <p><strong>路线一：只想理解架构（约 8 小时）</strong>
-Part A → Q03（事件总线）→ Q04（对话回合）→ Q06（工具执行）→ Q09（上下文）→ Q13（ACP）。
-跳过 Q05 的 provider 细节、Q07 的工具清单、Q14 的 TUI。</p>
+Part A → Q03（事件总线）→ Q04（对话回合）→ Q07（工具与 MCP）→ Q09（上下文）→ Q13（ACP）。
+跳过 Q05/Q06 的协议细节、Q14 的 TUI。</p>
 <p><strong>路线二：想改它（约 15 小时）</strong>
 全读，但 Part B 可以略读 Q05/Q07 的清单部分。重点在 Part C 与 Part E——
 那里讲的是「扩展点在哪、契约是什么」。</p>
@@ -197,8 +205,10 @@ Q03 → Q13（ACP/headless）→ Q19（自动化实战）→ Q15（Skill）→ Q
 Qwen 用 4 个包、55 个 core 子目录、一条事件总线应对真实产品的全部场景。
 前者适合学原理，后者适合学工程。</p>
 <h2 id="sec-15-六-体量分布-为什么章节权重要这么分">六、体量分布：为什么章节权重要这么分</h2>
-<p>计数口径：<code>.ts/.tsx</code>，排除 test/spec/<code>__snapshots__</code>/node_modules/dist；
-行数 = <code>split('\n').length</code>。这个口径贯穿全书，附录的源码索引也用同一套。</p>
+<p>计数口径：<code>.ts/.tsx</code>，排除 test/spec/<code>__snapshots__</code>/fixtures/node_modules/dist；
+行数 = 去掉末尾换行的内容行数（文件 85 行就是 85 行，不因末尾换行多算 1）。
+这个口径贯穿全书：正文的「N 行」、frontmatter 的「N 行代码」、验证脚本的输出，
+三者被 <code>npm run figures</code> 逐条比对，不一致就构建失败。</p>
 <h3 id="sec-16-core-的前十大目录">core 的前十大目录</h3>
 <div class="code-block" data-lang="text">
 <div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
@@ -227,9 +237,14 @@ Qwen 用 4 个包、55 个 core 子目录、一条事件总线应对真实产品
 <td>决策逻辑集中地</td>
 </tr>
 <tr>
-<td>Q06 工具执行</td>
-<td>~5,000 行</td>
-<td>与 Pi 的 8,577 行调度器直接对照</td>
+<td>Q06 消息协议</td>
+<td>~7,500 行</td>
+<td>七种消息的投影规则全在这里</td>
+</tr>
+<tr>
+<td>Q07 工具与 MCP</td>
+<td>~6 万行</td>
+<td>工具家族与 MCP 接入同一张表</td>
 </tr>
 <tr>
 <td>Q10 记忆/压缩</td>
@@ -249,7 +264,7 @@ Qwen 用 4 个包、55 个 core 子目录、一条事件总线应对真实产品
 <ul>
 <li>Qwen Code 1.0 Preview 是 <strong>4 个包、2,541 个文件、584,003 行</strong>的开源 Coding Agent。</li>
 <li><code>core</code> 是 UI 无关的运行时（33 万行），<code>cli</code> 是外壳集合（23 万行），
-<code>resource</code> 是配置底座，<code>ink-shim</code> 是 8 行的空壳。</li>
+<code>resource</code> 是配置底座，<code>ink-shim</code> 是只占包名的 29 行 shim。</li>
 <li>Apache-2.0；借鉴 Gemini CLI 但独立开发，文件头版权行区分来源。</li>
 <li>Qoder 的 Agent 能力合并在 <code>core/src/qoder/</code>，是客户端实现，服务端不在本书范围。</li>
 <li><strong>必须构建才能运行</strong>（<code>npm run build</code> → <code>npm run start</code>），这点和 Pi 不同。</li>

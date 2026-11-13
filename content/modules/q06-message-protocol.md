@@ -284,7 +284,7 @@ const SYNTHETIC_TOOL_INPUT_FIELDS = new Set([
 | | | `:473-532` normalizeMessagesForAPI，`:544-564` strip 集合 |
 | `packages/core/src/protocol/provider/sse-client.ts` | 640 | SSE 流解析 |
 | `packages/core/src/protocol/schemas/sdk-message.ts` | 1,554 | SDK 侧消息 schema |
-| `packages/core/src/protocol/wire/control.ts` | 534 | 控制帧协议 |
+| `packages/core/src/protocol/wire/control.ts` | 535 | 控制帧协议 |
 
 ## 九、自己动手验证
 

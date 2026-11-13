@@ -19,7 +19,7 @@
 <div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
                 <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
                 <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
-                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q03</span><span>85 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
                 <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
                 <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
                 <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
@@ -43,10 +43,14 @@
 <header class="module-header">
       <div class="module-eyebrow">附录 B</div>
       <h1>附录 B · 源码坐标总表</h1>
-      <div class="module-meta">129 个文件 · 209 条引用 · 约 6 分钟</div>
+      <div class="module-meta">129 个文件 · 208 条引用 · 约 6 分钟</div>
     </header>
-    <p>全书 19 章共引用 <strong>129 个源文件、209 处坐标</strong>。
+    <p>全书 19 章正文（Q01–Q19）共引用 <strong>129 个源文件、208 处坐标</strong>。
 本表按引用次数排序，方便你想「改这个行为会影响哪几章」时反查。</p>
+<blockquote>
+<p>口径：这里的「208 处」不含附录 B 自己（附录 B 是引用清单，计进去会把总数自我放大）。
+<code>npm run fact-check</code> 报的 337 条是全书合计数，差额就是本表自己那 129 行。</p>
+</blockquote>
 <div class="table-wrap"><table>
 <thead>
 <tr>

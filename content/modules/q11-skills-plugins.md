@@ -3,7 +3,7 @@ title: "技能与插件 —— 能执行 shell 的提示词"
 order: 11
 part: "Part C · 上下文与资产"
 eyebrow: "Q11"
-meta: "1,494 字 · 120 行代码 · 7 块 · 约 14 分钟"
+meta: "1,494 字 · 119 行代码 · 7 块 · 约 14 分钟"
 status: sample
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---

@@ -3,7 +3,7 @@ title: "实战四：写一个 MCP 服务器"
 order: 18
 part: "Part E · 实战拓展"
 eyebrow: "Q18"
-meta: "2,203 字 · 126 行代码 · 13 块 · 约 17 分钟"
+meta: "2,213 字 · 141 行代码 · 13 块 · 约 17 分钟"
 status: sample
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---
@@ -356,11 +356,26 @@ server scopes: 5 -> user / local / project / flag / dynamic
 tool name prefix: mcp__
 separator: __
 non-ascii hash length: 12
+normalize('my-server'): my-server
+normalize('发布工具').length: 14
 property key pattern: ^[a-zA-Z0-9_.-]{1,64}$
+max key length: 64
 has pruneGhostRequired: true
+top-level only (comment): true
 request timeout: 30000 ms
 hard timeout: 100000000 ms (~28h)
 idle timeout stdio/remote: 1800000 / 300000 ms
+sanitize then restore: true
+isError accepts string: true
+
+关键文件行数：
+   140 core/src/mcp/mcpServerConfig.ts
+    90 core/src/mcp/tools/mcp-names.ts
+   260 core/src/mcp/mcp-schema-sanitizer.ts
+  1336 core/src/mcp/tools/mcp-tool.ts
+   183 core/src/mcp/tools/mcp-timeouts.ts
+   914 core/src/mcp/client/mcpClient.ts
+   415 core/src/mcp/connector/connectMcpServer.ts
 ```
 
 改一处试试：把 `mcp-timeouts.ts:14` 的硬超时改成一个真实值，比如 60,000。

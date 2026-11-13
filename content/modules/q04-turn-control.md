@@ -3,7 +3,7 @@ title: "对话与回合 —— 一次请求如何被五个 handler 接力跑完"
 order: 4
 part: "Part B · 内核"
 eyebrow: "Q04"
-meta: "2,095 字 · 189 行代码 · 18 块 · 约 18 分钟"
+meta: "2,097 字 · 177 行代码 · 18 块 · 约 18 分钟"
 status: final
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---
@@ -488,8 +488,8 @@ turn stages: 6
 ## 十二、下一步
 
 本章讲完「谁决定继续还是收工」，但没讲**请求是怎么拼出来的**。
-`llm.request` 发出去后，`llm-handler.ts`（296 行）接住它，
-然后由 `llm/request-preparation.ts`（1,074 行）装配消息、工具清单、系统提示。
+`llm.request` 发出去后，`llm-handler.ts`（311 行）接住它，
+然后由 `llm/request-preparation.ts`（1132 行）装配消息、工具清单、系统提示。
 下一章 Q05 拆这条链路：一个 `llm.request` 到一次真实 HTTP 调用之间，
 到底有几次改写、几层缓存键、几个降级分支。
 

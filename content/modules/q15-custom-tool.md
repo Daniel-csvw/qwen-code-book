@@ -272,7 +272,7 @@ Q07 讲过 `signal` 一路到底。自己的 IO 调用要收 signal，
 | | | `:454-470` build 与 buildAndExecute，`:1572-1602` Kind 与两个子集 |
 | `packages/core/src/tools/tool-registry.ts` | 1,129 | `:269` registerTool，`:444` invalidateSchemaCache |
 | `packages/core/src/tools/tool-names.ts` | 658 | `:471-525` 内置工具清单 |
-| `packages/core/src/tools/tool-execution-lifecycle.ts` | 486 | 执行生命周期 |
+| `packages/core/src/tools/tool-execution-lifecycle.ts` | 509 | 执行生命周期 |
 | `packages/core/src/mcp/mcp-schema-sanitizer.ts` | 260 | MCP 三补丁 |
 
 ## 十、自己动手验证

@@ -19,7 +19,7 @@
 <div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
                 <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
                 <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
-                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q03</span><span>85 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
                 <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
                 <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
                 <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
@@ -43,7 +43,7 @@
 <header class="module-header">
       <div class="module-eyebrow">Q19</div>
       <h1>实战五：headless 流水线</h1>
-      <div class="module-meta">2,139 字 · 93 行代码 · 12 块 · 约 16 分钟</div>
+      <div class="module-meta">2,145 字 · 108 行代码 · 12 块 · 约 16 分钟</div>
     </header>
     <p>Q13 讲过 7 个 FrameworkMode，headless 与 ACP、TUI 并列。
 本章不再是「读代码」，而是<strong>把它接进 CI</strong>：
@@ -341,7 +341,7 @@ headless 自己不设总时长上限。CI 平台通常有 job timeout，
 <p>预期输出：</p>
 <div class="code-block" data-lang="text">
 <div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
-<pre><code><span class="ln">headless triggers: 4 -&gt; CI env | not TTY | prompt flag | stream-json</span><span class="ln">also accepts -p: true</span><span class="ln">GITHUB_ACTIONS env: true</span><span class="ln">headless routes: 2 -&gt; headlessStreamJson / headlessText</span><span class="ln">exit code: is_error -&gt; 1: true</span><span class="ln">exit code: aborted -&gt; 130: true</span><span class="ln">text result subtypes handled: success, error_during_execution, error_max_turns</span><span class="ln">permission prompt modes: 4 -&gt; stdio | named tool | stream-json→stdio |</span><span class="ln">  remote worker</span></code></pre></div>
+<pre><code><span class="ln">headless triggers: 4 -&gt; CI env | not TTY | prompt flag | stream-json</span><span class="ln">also accepts -p: true</span><span class="ln">GITHUB_ACTIONS env: true</span><span class="ln">headless routes: 2 -&gt; headlessStreamJson / headlessText</span><span class="ln">exit code: is_error -&gt; 1: true</span><span class="ln">exit code: aborted -&gt; 130: true</span><span class="ln">text result subtypes handled: success, error_during_execution, error_max_turns</span><span class="ln">writeHeadlessTextResult cases: 3</span><span class="ln">permission prompt modes: 4 -&gt; stdio | named tool | stream-json→stdio</span><span class="ln">  | remote worker</span><span class="ln">run() steps: 35</span><span class="ln">has runStreamJsonInput: true</span><span class="ln">has runTextTurn: true</span><span class="ln">session failure as single result frame: true</span><span class="ln"></span><span class="ln">关键文件行数：</span><span class="ln">   100 core/src/utils/headless.ts</span><span class="ln">   923 core/src/engine/headless-projection.ts</span><span class="ln">    42 cli/src/startup/options/headless.ts</span><span class="ln">   954 cli/src/headless/headlessSession.ts</span><span class="ln">   273 cli/src/utils/nonInteractiveOutput.ts</span><span class="ln">    54 cli/src/utils/headlessPermissionPrompt.ts</span><span class="ln">   351 cli/src/nonInteractiveCliCommands.ts</span></code></pre></div>
 <p>改一处试试：注释掉 <code>headless.ts:58</code> 里的 <code>!!options?.prompt</code>，
 然后用 <code>qwen -p &quot;hi&quot;</code> 在一个真终端里跑。</p>
 <p>你会看到它<strong>没有</strong>进 headless——因为 TTY 还在，

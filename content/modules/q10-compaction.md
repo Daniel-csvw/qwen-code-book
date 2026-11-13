@@ -3,7 +3,7 @@ title: "记忆压缩 —— 14 种失败原因与一道熔断"
 order: 10
 part: "Part C · 上下文与资产"
 eyebrow: "Q10"
-meta: "1,651 字 · 108 行代码 · 12 块 · 约 15 分钟"
+meta: "1,651 字 · 110 行代码 · 12 块 · 约 15 分钟"
 status: sample
 snapshot: "1.0.0-preview @ 2026-11-12"
 ---
@@ -322,6 +322,8 @@ breaker persisted: false
   738 compression-v2/pipeline.ts
   285 compression-v2/auto-compact.ts
   740 compression-v2/fork-compact.ts
+  823 compression-v2/post-compact-finalize.ts
+  436 compression-v2/apply-post-compact.ts
 ```
 
 改一处试试：往 `CompactionFailureReason` 里加一个

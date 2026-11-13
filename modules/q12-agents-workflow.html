@@ -19,7 +19,7 @@
 <div class="shell"><aside class="sidebar"><div class="part"><div class="part-title">Part A · 全景</div><a href="q01-overview.html" class="">
                 <span class="code">Q01</span><span>开篇 —— Qoder 与 Qwen 合并后，这 56 万行在做什么</span></a><a href="q02-repo-map.html" class="">
                 <span class="code">Q02</span><span>仓库地图 —— 4 个包、55 个目录、7 个入口</span></a></div><div class="part"><div class="part-title">Part B · 内核</div><a href="q03-query-eventbus.html" class="">
-                <span class="code">Q03</span><span>86 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
+                <span class="code">Q03</span><span>85 行入口与事件总线 —— 三个 handler 如何接力</span></a><a href="q04-turn-control.html" class="">
                 <span class="code">Q04</span><span>对话与回合 —— 一次请求如何被五个 handler 接力跑完</span></a><a href="q05-request-prep.html" class="">
                 <span class="code">Q05</span><span>一次请求的七步装配 —— 1,132 行里发生了什么</span></a><a href="q06-message-protocol.html" class="">
                 <span class="code">Q06</span><span>消息协议 —— 七种消息如何投影成一次请求</span></a><a href="q07-tools-mcp.html" class="">
@@ -43,7 +43,7 @@
 <header class="module-header">
       <div class="module-eyebrow">Q12</div>
       <h1>Agent 与 Workflow —— 六种终止模式与四个内置代理</h1>
-      <div class="module-meta">1,597 字 · 24 行代码 · 4 块 · 约 13 分钟</div>
+      <div class="module-meta">1,597 字 · 28 行代码 · 4 块 · 约 13 分钟</div>
     </header>
     <p>Q07 提到 <code>Agent</code> 是唯一的代理入口，<code>explore</code>、<code>plan</code> 只是它的参数。
 本章讲这个入口背后的执行模型：
@@ -327,7 +327,7 @@
 <p>预期输出：</p>
 <div class="code-block" data-lang="text">
 <div class="code-head"><span class="lang">text</span><button type="button" class="copy" aria-label="复制代码">复制</button></div>
-<pre><code><span class="ln">terminate modes: 6</span><span class="ln">builtin agents: 4</span><span class="ln">turn defaults: 2</span><span class="ln">agent tool methods: 52</span><span class="ln">  442 agents/types.ts</span><span class="ln"> 2242 agents/subagent-tool.ts</span><span class="ln"> 1893 agents/run-agent.ts</span><span class="ln"> 1013 agents/registry/agentRegistry.ts</span></code></pre></div>
+<pre><code><span class="ln">terminate modes: 6</span><span class="ln">builtin agents: 4</span><span class="ln">turn defaults: 2</span><span class="ln">agent tool methods: 52</span><span class="ln">  442 agents/types.ts</span><span class="ln"> 2242 agents/subagent-tool.ts</span><span class="ln"> 1893 agents/run-agent.ts</span><span class="ln"> 1013 agents/registry/agentRegistry.ts</span><span class="ln">  677 agents/run-subagent.ts</span><span class="ln">  197 agents/builtin/explore-agent.ts</span><span class="ln">  384 agents/subagent-sdk-events.ts</span><span class="ln">  781 agents/teams/agent-team-runtime.ts</span></code></pre></div>
 <p>改一处试试：把 <code>AgentTerminateMode.ERROR_NO_COMPLETE_TASK_CALL</code>
 合并进 <code>ERROR</code>，然后让一个子代理只说「我做完了」但不调 <code>CompleteTask</code>。
 父代理会收到一个普通的错误，然后选择重试——
